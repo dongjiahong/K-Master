@@ -120,11 +120,11 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
         {/* TOP SECTION (50%): Parameters & Logic */}
         <div className="h-1/2 flex flex-col border-b border-gray-200 dark:border-gray-800 overflow-hidden">
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <form id="trade-form" onSubmit={handleSubmit} className="flex-col p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
+                <form id="trade-form" onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 pb-0 gap-4 min-h-0">
                     
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2 shrink-0">
                         <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
                             <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Target size={10}/> Entry</span>
                             <span className="text-sm font-mono font-bold text-gray-900 dark:text-white">{activePrice.toFixed(2)}</span>
@@ -141,7 +141,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
                     {/* View Mode PNL Display */}
                     {isViewMode && viewingTrade && (
-                        <div className="grid grid-cols-2 gap-3 animate-in fade-in">
+                        <div className="grid grid-cols-2 gap-3 animate-in fade-in shrink-0">
                             <div className={`p-3 rounded border bg-gray-50 dark:bg-gray-900/50 ${viewingTrade.pnl >= 0 ? 'border-trade-profit/30' : 'border-trade-loss/30'}`}>
                                 <span className="text-[10px] text-gray-500 block">REALIZED PNL</span>
                                 <span className={`text-xl font-mono font-bold ${viewingTrade.pnl >= 0 ? 'text-trade-profit' : 'text-trade-loss'}`}>
@@ -156,9 +156,9 @@ const TradePanel: React.FC<TradePanelProps> = ({
                     )}
 
                     {/* Content Container */}
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 flex-1 min-h-0">
                         {/* Inputs Row */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4 shrink-0">
                             <div className={`bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-3 ${!isViewMode && 'focus-within:border-trade-profit transition-colors'}`}>
                                 <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Take Profit</label>
                                 <input
@@ -180,7 +180,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
                         </div>
 
                         {/* Textarea */}
-                        <div className="flex flex-col gap-2 min-h-[100px]">
+                        <div className="flex flex-col gap-2 flex-1 pb-2">
                             <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
                                <FileText size={12}/> {isViewMode ? 'TRADING LOGIC' : 'TRADING PLAN (MARKDOWN)'}
                             </label>
@@ -191,7 +191,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
                                 placeholder="# My Setup..."
-                                className="w-full flex-1 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80"
+                                className="w-full h-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80"
                             />
                         </div>
                     </div>
@@ -200,7 +200,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
             
              {/* Submit Button Sticky Footer within Top Half */}
             {!isViewMode && (
-                <div className="p-4 pt-0 shrink-0 bg-white dark:bg-gray-950 z-10">
+                <div className="p-4 pt-2 shrink-0 bg-white dark:bg-gray-950 z-10 border-t border-gray-100 dark:border-gray-800">
                     <button
                         type="submit"
                         form="trade-form"

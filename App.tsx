@@ -16,7 +16,7 @@ import { db } from './db';
 import TradePanel from './components/TradePanel';
 import GameHistoryPanel from './components/GameHistoryPanel';
 import DashboardPanel from './components/DashboardPanel';
-import SettingsModal from './components/SettingsModal';
+import SettingsPanel from './components/SettingsModal';
 import SessionRestoreModal from './components/SessionRestoreModal';
 import ConfirmDialog from './components/ConfirmDialog';
 
@@ -29,7 +29,7 @@ const PRELOAD_COUNT = 200; // Visible candles at start
 const SUPPORTED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'DOGEUSDT', 'XRPUSDT'];
 const SUPPORTED_TIMEFRAMES = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1];
 
-type SidebarView = 'DASHBOARD' | 'TRADE_PANEL' | 'HISTORY_PANEL';
+type SidebarView = 'DASHBOARD' | 'TRADE_PANEL' | 'HISTORY_PANEL' | 'SETTINGS';
 
 const App: React.FC = () => {
   // --- State ---
@@ -73,7 +73,6 @@ const App: React.FC = () => {
   const [comparisonStats, setComparisonStats] = useState<any[]>([]); // For End Game Comparison
   
   const [customPrompt, setCustomPrompt] = useState<string>('');
-  const [showSettings, setShowSettings] = useState(false);
   
   // Restore Modal
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -130,27 +129,50 @@ const App: React.FC = () => {
         grid: { show: false, horizontal: { color: chartGrid }, vertical: { color: chartGrid } },
         layout: { backgroundColor: chartBg, textColor: chartText },
         crosshair: { horizontal: { text: { color: '#ffffff' } }, vertical: { text: { color: '#ffffff' } } },
-        separator: { size: 1, color: chartBorder }
+        separator: { size: 1, color: chartBorder },
+        yAxis: { 
+            inside: false,
+            axisLine: { show: true, color: chartBorder }, 
+            tickText: { show: true, color: chartText }
+        }
       };
 
       ltfChartInstance.current?.setStyleOptions(styles);
       htfChartInstance.current?.setStyleOptions(styles);
   }, [theme]);
+  
+  // --- Resize Observer Effect ---
+  useEffect(() => {
+      const resizeObserver = new ResizeObserver(() => {
+          if (ltfChartInstance.current) ltfChartInstance.current.resize();
+          if (htfChartInstance.current) htfChartInstance.current.resize();
+      });
 
-  // --- Sidebar Resizing Logic ---
+      if (ltfChartRef.current) resizeObserver.observe(ltfChartRef.current);
+      if (htfChartRef.current) resizeObserver.observe(htfChartRef.current);
+
+      return () => {
+          resizeObserver.disconnect();
+      };
+  }, []);
+
+  // --- Sidebar Resizing Logic (RIGHT SIDEBAR) ---
   useEffect(() => {
       const handleMouseMove = (e: MouseEvent) => {
           if (isResizingHistory) {
-              // Calculate new width: Window Width - Mouse X
-              const newWidth = window.innerWidth - e.clientX;
-              if (newWidth > 250 && newWidth < 800) {
-                  setHistoryPanelWidth(newWidth);
-              }
+              // Right Sidebar: Width is Window Width - Mouse X
+              const newWidth = Math.max(250, Math.min(800, window.innerWidth - e.clientX));
+              setHistoryPanelWidth(newWidth);
           }
       };
       const handleMouseUp = () => {
           setIsResizingHistory(false);
           document.body.style.cursor = 'auto';
+          // Trigger resize on charts after layout change
+          setTimeout(() => {
+              ltfChartInstance.current?.resize();
+              htfChartInstance.current?.resize();
+          }, 50);
       };
 
       if (isResizingHistory) {
@@ -526,7 +548,12 @@ const App: React.FC = () => {
         },
         layout: { backgroundColor: chartBg, textColor: chartText },
         crosshair: { horizontal: { text: { color: '#ffffff' } }, vertical: { text: { color: '#ffffff' } } },
-        separator: { size: 1, color: chartBorder } 
+        separator: { size: 1, color: chartBorder },
+        yAxis: { 
+            inside: false,
+            axisLine: { show: true, color: chartBorder }, 
+            tickText: { show: true, color: chartText }
+        }
       };
       
       ltfChartInstance.current?.setStyleOptions(chartStyles);
@@ -538,11 +565,16 @@ const App: React.FC = () => {
       ltfChartInstance.current?.applyNewData(ltfData);
       htfChartInstance.current?.applyNewData(htfData);
       
+      // Enable Zooming (X-Axis) and Scrolling
       ltfChartInstance.current?.setZoomEnabled(true);
       ltfChartInstance.current?.setScrollEnabled(true);
+      
       htfChartInstance.current?.setZoomEnabled(true);
       htfChartInstance.current?.setScrollEnabled(true);
-
+      
+      // Ensure there's space on the right for the axis interaction if needed
+      // klinecharts usually handles Y-axis scaling via drag on the axis itself
+      
       ltfChartInstance.current?.subscribeAction('onCandleBarClick', (params: any) => {
           const data = params.data || params;
           if (!data || !data.timestamp) return;
@@ -934,7 +966,7 @@ const App: React.FC = () => {
                 <span className="hidden lg:inline text-xs font-bold">Career</span>
             </button>
 
-            <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors relative text-gray-500 dark:text-gray-400">
+            <button onClick={() => setSidebarView('SETTINGS')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors relative text-gray-500 dark:text-gray-400">
                 <Settings size={18} />
             </button>
         </div>
@@ -942,8 +974,9 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Charts */}
-        <div className="flex-1 flex flex-col relative border-r border-gray-200 dark:border-gray-800 min-w-0">
+        
+        {/* Charts (Left Side) */}
+        <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
             {/* Back to Live Button (Overlay) */}
             {isReviewingHistory && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
@@ -976,13 +1009,13 @@ const App: React.FC = () => {
                  </div>
             </div>
         </div>
-
-        {/* Resizable Sidebar (Unified Container) */}
+        
+        {/* Resizable Sidebar (Right Side) */}
         <div 
-             className="flex flex-col bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative transition-all duration-200 ease-linear"
+             className="flex flex-col bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 relative transition-all duration-200 ease-linear z-20"
              style={{ width: historyPanelWidth }}
         >
-             {/* Resize Handle */}
+             {/* Resize Handle (Left Edge) */}
              <div 
                  className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors z-50"
                  onMouseDown={() => setIsResizingHistory(true)}
@@ -1036,25 +1069,30 @@ const App: React.FC = () => {
                     />
                  </div>
              )}
+
+             {/* === VIEW 4: SETTINGS PANEL === */}
+             {sidebarView === 'SETTINGS' && (
+                 <div className="h-full animate-in slide-in-from-right-10">
+                    <SettingsPanel 
+                        onClose={() => setSidebarView('DASHBOARD')}
+                        configSymbol={configSymbol}
+                        setConfigSymbol={setConfigSymbol}
+                        configTimeframe={configTimeframe}
+                        setConfigTimeframe={setConfigTimeframe}
+                        customPrompt={customPrompt}
+                        setCustomPrompt={setCustomPrompt}
+                        SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS}
+                        SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
+                        theme={theme}
+                        setTheme={setTheme}
+                    />
+                 </div>
+             )}
         </div>
+
       </div>
 
-      {/* Modals */}
-      <SettingsModal 
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        configSymbol={configSymbol}
-        setConfigSymbol={setConfigSymbol}
-        configTimeframe={configTimeframe}
-        setConfigTimeframe={setConfigTimeframe}
-        customPrompt={customPrompt}
-        setCustomPrompt={setCustomPrompt}
-        SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS}
-        SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
-        theme={theme}
-        setTheme={setTheme}
-      />
-
+      {/* Modals: Removed SettingsModal and moved to Sidebar */}
       <SessionRestoreModal
         isOpen={showRestoreModal}
         session={pendingRestoreSession}

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Cpu, Sliders, Moon, Sun } from 'lucide-react';
+import { Settings, Cpu, Sliders, Moon, Sun, ArrowLeft } from 'lucide-react';
 import { Timeframe } from '../types';
-import FloatingPanel from './FloatingPanel';
 
 interface SettingsModalProps {
-  isOpen: boolean;
   onClose: () => void;
   configSymbol: string;
   setConfigSymbol: (val: string) => void;
@@ -18,8 +16,8 @@ interface SettingsModalProps {
   setTheme: (val: 'dark' | 'light') => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({
-  isOpen, onClose,
+const SettingsPanel: React.FC<SettingsModalProps> = ({
+  onClose,
   configSymbol, setConfigSymbol,
   configTimeframe, setConfigTimeframe,
   customPrompt, setCustomPrompt,
@@ -34,13 +32,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localTheme, setLocalTheme] = useState(theme);
 
   useEffect(() => {
-    if (isOpen) {
       setLocalSymbol(configSymbol);
       setLocalTimeframe(configTimeframe);
       setLocalPrompt(customPrompt);
       setLocalTheme(theme);
-    }
-  }, [isOpen, configSymbol, configTimeframe, customPrompt, theme]);
+  }, [configSymbol, configTimeframe, customPrompt, theme]);
 
   const handleSave = () => {
     setConfigSymbol(localSymbol);
@@ -50,24 +46,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
-  const Title = (
-      <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold">
-        <Settings size={20} className="text-blue-600 dark:text-blue-500"/>
-        <span>SETTINGS</span>
-      </div>
-  );
-
   return (
-    <FloatingPanel
-        title={Title}
-        isOpen={isOpen}
-        onClose={onClose}
-        initialWidth={350}
-        initialHeight={500}
-        initialX={window.innerWidth - 370}
-        initialY={100}
-    >
-        <div className="flex flex-col h-full bg-white dark:bg-gray-950">
+    <div className="h-full flex flex-col bg-white dark:bg-gray-950 w-full">
+        {/* Header */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
+             <div className="flex items-center gap-2">
+                 <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 transition-colors">
+                     <ArrowLeft size={20} />
+                 </button>
+                 <Settings className="text-blue-500" size={18} />
+                 <span className="font-bold text-gray-900 dark:text-white">设置</span>
+             </div>
+        </div>
+
+        <div className="flex flex-col h-full overflow-hidden">
             {/* Header Tabs */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 shrink-0">
                 <div className="flex bg-gray-200 dark:bg-gray-800 rounded p-1 border border-gray-300 dark:border-gray-700">
@@ -182,12 +174,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={handleSave}
                 className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-all shadow-lg hover:shadow-blue-500/20 active:scale-95"
             >
-                Save Changes
+                Save
             </button>
             </div>
         </div>
-    </FloatingPanel>
+    </div>
   );
 };
 
-export default SettingsModal;
+export default SettingsPanel;
