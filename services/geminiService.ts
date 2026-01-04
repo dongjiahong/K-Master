@@ -42,7 +42,7 @@ export const analyzeTrade = async (
   ).join('\n');
 
   const textPrompt = `
-  ${customPrompt || "请评价我的这笔交易："}
+  ${customPrompt || "请评价我的这笔交易并进行打分(x/10)："}
   
   **交易环境**:
   - 标的: ${trade.symbol}
@@ -58,10 +58,11 @@ export const analyzeTrade = async (
   **最近数据**:
   ${context}
   
-  请结合提供的 K 线图截图（包含大小周期）和上述数据，给出简短（150字以内）但深刻的实时评价。重点关注：
+  请结合提供的 K 线图截图（包含大小周期）和上述数据，给出深刻的实时评价。重点关注：
   1. 大周期趋势是否配合？
   2. 入场位置是否合理？
   3. 成交量是否有异常？
+  4. 盈亏比是否合适？
   `;
 
   const parts: any[] = [{ text: textPrompt }];

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, TrendingUp, TrendingDown, Bot, Target, Hash, Percent, ArrowLeft } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, Bot, Target, Hash, Percent, ArrowLeft, ChevronUp, ChevronDown, Zap, Sparkles } from 'lucide-react';
 import { Trade } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 
 interface TradePanelProps {
   onClose: () => void; // Now acts as "Back"
   // Create Mode Props
-  onConfirm?: (reason: string, tp: number, sl: number) => void;
+  onConfirm?: (reason: string, tp: number, sl: number, preAnalysis?: string) => void;
+  onAnalyze?: (reason: string, tp: number, sl: number) => Promise<string>;
   currentPrice?: number;
   direction?: 'LONG' | 'SHORT';
   balance?: number; 
@@ -16,18 +17,26 @@ interface TradePanelProps {
   isLoading?: boolean;
 }
 
+const DEFAULT_REASON_TEMPLATE = `# 交易计划\n\n**结构/形态**：\n\n**入场理由**：\n`;
+
 const TradePanel: React.FC<TradePanelProps> = ({ 
   onClose, 
-  onConfirm, 
+  onConfirm,
+  onAnalyze,
   currentPrice = 0, 
   direction = 'LONG',
   balance = 0,
   viewingTrade,
   isLoading = false
 }) => {
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(DEFAULT_REASON_TEMPLATE);
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
+  
+  // UI States
+  // 默认展开，分析完后自动收起以展示 AI 结果
+  const [isFormExpanded, setIsFormExpanded] = useState(true);
+  const [localAnalysis, setLocalAnalysis] = useState<string | null>(null);
 
   // Loading Animation State
   const [loadingMsg, setLoadingMsg] = useState('Initializing AI...');
@@ -36,13 +45,12 @@ const TradePanel: React.FC<TradePanelProps> = ({
     if (!isLoading) return;
     
     const messages = [
-      "Analyzing Market Structure...",
-      "Scanning Candlestick Patterns...",
-      "Identifying Support & Resistance...",
-      "Calculating Risk/Reward Ratio...",
-      "Evaluating Trend Momentum...",
-      "Consulting Trading Strategy...",
-      "Drafting Coach Feedback..."
+      "识别市场结构...",
+      "扫描 K 线形态...",
+      "计算盈亏比 (R/R)...",
+      "评估趋势动能...",
+      "生成交易策略...",
+      "AI 教练正在撰写评价..."
     ];
     
     let i = 0;
@@ -73,38 +81,59 @@ const TradePanel: React.FC<TradePanelProps> = ({
     ? viewingTrade.quantity 
     : (balance * 0.5) / activePrice;
 
+  // Initialize Data
   useEffect(() => {
       if (isViewMode && viewingTrade) {
           setReason(viewingTrade.reason);
           setTp(viewingTrade.tp.toString());
           setSl(viewingTrade.sl.toString());
+          setLocalAnalysis(viewingTrade.aiComment || null);
+          setIsFormExpanded(false); // 查看模式下默认收起表单，展示 AI 结果
       } else {
-          setReason('');
-          // Default TP/SL logic
-          const dist = currentPrice * 0.01; 
-          if (direction === 'LONG') {
-              setTp((currentPrice + dist * 2).toFixed(2));
-              setSl((currentPrice - dist).toFixed(2));
-          } else {
-              setTp((currentPrice - dist * 2).toFixed(2));
-              setSl((currentPrice + dist).toFixed(2));
+          // Reset for new trade only if we don't have a local analysis (prevent reset during re-renders)
+          if (!localAnalysis && reason === DEFAULT_REASON_TEMPLATE && !tp) {
+             // Default TP/SL logic
+             const dist = currentPrice * 0.01; 
+             if (direction === 'LONG') {
+                 setTp((currentPrice + dist * 2).toFixed(2));
+                 setSl((currentPrice - dist).toFixed(2));
+             } else {
+                 setTp((currentPrice - dist * 2).toFixed(2));
+                 setSl((currentPrice + dist).toFixed(2));
+             }
           }
       }
   }, [isViewMode, viewingTrade, currentPrice, direction]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle "Analyze" click
+  const handleAnalyzeClick = async () => {
+      if (onAnalyze && !isLoading) {
+          try {
+            // 先展开表单让用户感觉是在基于当前输入分析（其实这里不用操作UI，只需调用逻辑）
+            const result = await onAnalyze(reason, parseFloat(tp), parseFloat(sl));
+            setLocalAnalysis(result);
+            setIsFormExpanded(false); // 分析完成后，自动收起表单，最大化 AI 区域
+          } catch (e) {
+              console.error(e);
+          }
+      }
+  };
+
+  // Handle "Execute" click
+  const handleExecuteClick = () => {
     if (onConfirm) {
-        onConfirm(reason, parseFloat(tp), parseFloat(sl));
+        onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis || undefined);
     }
   };
 
   const themeColor = activeDirection === 'LONG' ? 'text-trade-profit' : 'text-trade-loss';
+  const themeBg = activeDirection === 'LONG' ? 'bg-trade-profit' : 'bg-trade-loss';
+  const themeBorder = activeDirection === 'LONG' ? 'border-trade-profit' : 'border-trade-loss';
   
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-950 w-full overflow-hidden">
-        {/* Header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        {/* === Header (Actions Area) === */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-950 z-20">
              <div className="flex items-center gap-2">
                  <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 transition-colors">
                      <ArrowLeft size={20} />
@@ -112,55 +141,81 @@ const TradePanel: React.FC<TradePanelProps> = ({
                  <div className={`p-1 rounded bg-gray-100 dark:bg-gray-800 ${themeColor}`}>
                     {activeDirection === 'LONG' ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
                  </div>
-                 <span className={`font-black tracking-tight ${themeColor}`}>
-                    {isViewMode ? 'TRADE DETAILS' : `OPEN ${activeDirection}`}
+                 <span className={`font-black tracking-tight ${themeColor} hidden sm:inline`}>
+                    {isViewMode ? '详情' : `${activeDirection === 'LONG' ? '做多' : '做空'}计划`}
                  </span>
              </div>
+
+             {/* Header Actions (Right Side) */}
+             {!isViewMode && (
+                 <div className="flex items-center gap-2">
+                     <button
+                        onClick={handleAnalyzeClick}
+                        disabled={isLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 border border-indigo-200 dark:border-indigo-800"
+                     >
+                        <Sparkles size={14} />
+                        <span className="hidden sm:inline">AI 分析</span>
+                     </button>
+                     
+                     <button
+                        onClick={handleExecuteClick}
+                        disabled={isLoading}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${themeBg} text-white font-bold text-xs hover:opacity-90 transition-all shadow-md active:scale-95 disabled:opacity-50`}
+                     >
+                        <Zap size={14} fill="currentColor"/>
+                        <span>执行下单</span>
+                     </button>
+                 </div>
+             )}
         </div>
 
-        {/* TOP SECTION (50%): Parameters & Logic */}
-        <div className="h-1/2 flex flex-col border-b border-gray-200 dark:border-gray-800 overflow-hidden">
-            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
-                <form id="trade-form" onSubmit={handleSubmit} className="flex flex-col flex-1 p-4 pb-0 gap-4 min-h-0">
-                    
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-3 gap-2 shrink-0">
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
-                            <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Target size={10}/> Entry</span>
-                            <span className="text-sm font-mono font-bold text-gray-900 dark:text-white">{activePrice.toFixed(2)}</span>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
-                            <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Hash size={10}/> Qty</span>
-                            <span className="text-sm font-mono font-bold text-gray-700 dark:text-gray-300">{quantity.toFixed(4)}</span>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
-                            <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Percent size={10}/> R/R</span>
-                            <span className={`text-sm font-mono font-bold ${parseFloat(rrRatio) >= 2 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'}`}>1:{rrRatio}</span>
-                        </div>
-                    </div>
+        {/* Content Wrapper ensuring proper flex distribution */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
 
-                    {/* View Mode PNL Display */}
-                    {isViewMode && viewingTrade && (
-                        <div className="grid grid-cols-2 gap-3 animate-in fade-in shrink-0">
-                            <div className={`p-3 rounded border bg-gray-50 dark:bg-gray-900/50 ${viewingTrade.pnl >= 0 ? 'border-trade-profit/30' : 'border-trade-loss/30'}`}>
-                                <span className="text-[10px] text-gray-500 block">REALIZED PNL</span>
-                                <span className={`text-xl font-mono font-bold ${viewingTrade.pnl >= 0 ? 'text-trade-profit' : 'text-trade-loss'}`}>
-                                    {viewingTrade.pnl >= 0 ? '+' : ''}{viewingTrade.pnl.toFixed(2)}
-                                </span>
+            {/* === Form Section (Collapsible, takes 45% height when expanded for optimal ratio) === */}
+            <div className={`flex flex-col border-b border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out bg-white dark:bg-gray-950 overflow-hidden ${isFormExpanded ? 'h-[45%]' : 'h-0'}`}>
+                {/* Changed to flex-col to allow children to grow */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col">
+                        
+                    {/* Fixed Height Wrapper for Top Inputs */}
+                    <div className="space-y-4 shrink-0">
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
+                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Target size={10}/> 入场价</span>
+                                <span className="text-sm font-mono font-bold text-gray-900 dark:text-white">{activePrice.toFixed(2)}</span>
                             </div>
-                            <div className="p-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-                                <span className="text-[10px] text-gray-500 block">STATUS</span>
-                                <span className="text-sm font-bold text-gray-900 dark:text-white">{viewingTrade.status}</span>
+                            <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
+                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Hash size={10}/> 数量</span>
+                                <span className="text-sm font-mono font-bold text-gray-700 dark:text-gray-300">{quantity.toFixed(4)}</span>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
+                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Percent size={10}/> 盈亏比</span>
+                                <span className={`text-sm font-mono font-bold ${parseFloat(rrRatio) >= 2 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'}`}>1:{rrRatio}</span>
                             </div>
                         </div>
-                    )}
 
-                    {/* Content Container */}
-                    <div className="flex flex-col gap-4 flex-1 min-h-0">
+                        {/* View Mode PNL Display */}
+                        {isViewMode && viewingTrade && (
+                            <div className="grid grid-cols-2 gap-3 animate-in fade-in">
+                                <div className={`p-3 rounded border bg-gray-50 dark:bg-gray-900/50 ${viewingTrade.pnl >= 0 ? 'border-trade-profit/30' : 'border-trade-loss/30'}`}>
+                                    <span className="text-[10px] text-gray-500 block">已实现盈亏</span>
+                                    <span className={`text-xl font-mono font-bold ${viewingTrade.pnl >= 0 ? 'text-trade-profit' : 'text-trade-loss'}`}>
+                                        {viewingTrade.pnl >= 0 ? '+' : ''}{viewingTrade.pnl.toFixed(2)}
+                                    </span>
+                                </div>
+                                <div className="p-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                                    <span className="text-[10px] text-gray-500 block">状态</span>
+                                    <span className="text-sm font-bold text-gray-900 dark:text-white">{viewingTrade.status}</span>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Inputs Row */}
-                        <div className="grid grid-cols-2 gap-4 shrink-0">
+                        <div className="grid grid-cols-2 gap-4">
                             <div className={`bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-3 ${!isViewMode && 'focus-within:border-trade-profit transition-colors'}`}>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Take Profit</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">止盈 (TP)</label>
                                 <input
                                     disabled={isViewMode}
                                     type="number" step="0.0001" required
@@ -169,7 +224,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 />
                             </div>
                             <div className={`bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-3 ${!isViewMode && 'focus-within:border-trade-loss transition-colors'}`}>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Stop Loss</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">止损 (SL)</label>
                                 <input
                                     disabled={isViewMode}
                                     type="number" step="0.0001" required
@@ -178,84 +233,86 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 />
                             </div>
                         </div>
-
-                        {/* Textarea */}
-                        <div className="flex flex-col gap-2 flex-1 pb-2">
-                            <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
-                               <FileText size={12}/> {isViewMode ? 'TRADING LOGIC' : 'TRADING PLAN (MARKDOWN)'}
-                            </label>
-                            <textarea
-                                disabled={isViewMode}
-                                required
-                                autoFocus={!isViewMode}
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                                placeholder="# My Setup..."
-                                className="w-full h-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80"
-                            />
-                        </div>
                     </div>
-                </form>
-            </div>
-            
-             {/* Submit Button Sticky Footer within Top Half */}
-            {!isViewMode && (
-                <div className="p-4 pt-2 shrink-0 bg-white dark:bg-gray-950 z-10 border-t border-gray-100 dark:border-gray-800">
-                    <button
-                        type="submit"
-                        form="trade-form"
-                        className={`w-full py-3 rounded-xl font-black text-white shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
-                            activeDirection === 'LONG' 
-                            ? 'bg-gradient-to-r from-emerald-600 to-trade-profit' 
-                            : 'bg-gradient-to-r from-rose-700 to-trade-loss'
-                        }`}
-                    >
-                        EXECUTE {activeDirection}
-                    </button>
+                    
+                    {/* Gap */}
+                    <div className="h-4 shrink-0"></div>
+
+                    {/* Textarea - Flexible Height with Compact Min-Height */}
+                    <div className="flex-1 flex flex-col gap-2 min-h-[8rem]">
+                        <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
+                            <FileText size={12}/> {isViewMode ? '交易逻辑' : '交易计划 (支持 Markdown)'}
+                        </label>
+                        <textarea
+                            disabled={isViewMode}
+                            required
+                            autoFocus={!isViewMode}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder="# 我的入场逻辑..."
+                            className="w-full flex-1 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80"
+                        />
+                    </div>
                 </div>
-            )}
-        </div>
-
-        {/* BOTTOM SECTION (50%): AI Commentary */}
-        <div className="h-1/2 flex flex-col min-h-0 bg-gray-50 dark:bg-gray-900">
-            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 text-indigo-500 dark:text-indigo-400 bg-white dark:bg-gray-900 shrink-0">
-                <Bot size={16} />
-                <span className="text-xs font-bold uppercase tracking-wider">AI Coach Analysis</span>
             </div>
-            <div className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50">
-                {isLoading ? (
-                    <div className="h-full flex flex-col items-center justify-center gap-6 p-6">
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse rounded-full"></div>
-                            <div className="relative z-10 bg-white dark:bg-gray-900 rounded-full p-4 border border-indigo-200 dark:border-indigo-500/30 shadow-lg">
-                                <Bot size={32} className="text-indigo-500 dark:text-indigo-400 animate-bounce" />
+
+            {/* === Collapse Toggle Bar === */}
+            <button 
+                onClick={() => setIsFormExpanded(!isFormExpanded)}
+                className="w-full flex items-center justify-center py-1.5 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors border-b border-gray-200 dark:border-gray-800 z-10 shrink-0 cursor-row-resize shadow-sm"
+                title={isFormExpanded ? "收起表单" : "展开表单"}
+            >
+                {isFormExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {/* === AI Output Section (Takes remaining space) === */}
+            <div className={`flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-gray-900 relative`}>
+                <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 text-indigo-500 dark:text-indigo-400 bg-white dark:bg-gray-900 shrink-0">
+                    <Bot size={16} />
+                    <span className="text-xs font-bold uppercase tracking-wider">AI 教练分析</span>
+                    {!isFormExpanded && !isLoading && (
+                        <span className="ml-auto text-[10px] bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full animate-pulse">
+                            Ready
+                        </span>
+                    )}
+                </div>
+                
+                <div className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50">
+                    {isLoading ? (
+                        <div className="h-full flex flex-col items-center justify-center gap-6 p-6">
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse rounded-full"></div>
+                                <div className="relative z-10 bg-white dark:bg-gray-900 rounded-full p-4 border border-indigo-200 dark:border-indigo-500/30 shadow-lg">
+                                    <Bot size={32} className="text-indigo-500 dark:text-indigo-400 animate-bounce" />
+                                </div>
+                            </div>
+                            <div className="text-center space-y-2 max-w-[90%]">
+                                <p className="text-indigo-600 dark:text-indigo-300 font-bold text-xs animate-pulse">{loadingMsg}</p>
+                                <div className="flex gap-1.5 justify-center mt-2">
+                                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+                                </div>
                             </div>
                         </div>
-                        <div className="text-center space-y-2 max-w-[90%]">
-                            <p className="text-indigo-600 dark:text-indigo-300 font-bold text-xs animate-pulse">{loadingMsg}</p>
-                            <div className="flex gap-1.5 justify-center mt-2">
-                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
-                            </div>
+                    ) : (localAnalysis || (isViewMode && viewingTrade?.aiComment)) ? (
+                        <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed animate-in fade-in slide-in-from-bottom-2">
+                             <MarkdownRenderer content={localAnalysis || viewingTrade?.aiComment || ""} />
                         </div>
-                    </div>
-                ) : isViewMode && viewingTrade?.aiComment ? (
-                    <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed">
-                         <MarkdownRenderer content={viewingTrade.aiComment} />
-                    </div>
-                ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-2">
-                         {isViewMode ? (
-                            <span className="text-xs">No analysis available for this trade.</span>
-                         ) : (
-                            <>
-                                <Bot size={24} className="opacity-20"/>
-                                <span className="text-xs text-center px-8">Analysis will appear here after execution.</span>
-                            </>
-                         )}
-                    </div>
-                )}
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-2 opacity-60">
+                             {isViewMode ? (
+                                <span className="text-xs">暂无 AI 分析记录</span>
+                             ) : (
+                                <>
+                                    <Sparkles size={32} className="mb-2 text-indigo-300 dark:text-indigo-700"/>
+                                    <span className="text-xs text-center px-8 font-bold">建议先点击顶部 'AI 分析' 获取策略</span>
+                                    <span className="text-[10px] text-center px-8">Analysis First, Execute Later</span>
+                                </>
+                             )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     </div>

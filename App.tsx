@@ -569,9 +569,6 @@ const App: React.FC = () => {
       ltfChartInstance.current?.setZoomEnabled(true);
       ltfChartInstance.current?.setScrollEnabled(true);
       
-      htfChartInstance.current?.setZoomEnabled(true);
-      htfChartInstance.current?.setScrollEnabled(true);
-      
       // Ensure there's space on the right for the axis interaction if needed
       // klinecharts usually handles Y-axis scaling via drag on the axis itself
       
@@ -735,12 +732,31 @@ const App: React.FC = () => {
     setSidebarView('TRADE_PANEL');
   };
 
-  const executeTrade = async (reason: string, tp: number, sl: number) => {
+  // Extract chart image logic reuse
+  const getChartImages = () => {
+      const getChartImage = (chart: any) => {
+        if (!chart) return undefined;
+        try {
+            // @ts-ignore
+            if (typeof chart.getDataUrl === 'function') return chart.getDataUrl({ type: 'jpeg', backgroundColor: '#111827' });
+            // @ts-ignore
+            if (typeof chart.getConvertPictureUrl === 'function') return chart.getConvertPictureUrl(true, 'jpeg', '#111827');
+        } catch (e) { console.warn(e); }
+        return undefined;
+      };
+
+      return {
+          ltfImage: getChartImage(ltfChartInstance.current),
+          htfImage: getChartImage(htfChartInstance.current)
+      };
+  };
+
+  const createTradeObject = (reason: string, tp: number, sl: number): Trade => {
     const currentCandle = allCandles[currentIndex];
     const price = currentCandle.close;
     const quantity = (balance * 0.5) / price; 
 
-    const newTrade: Trade = {
+    return {
       id: `trade_${Date.now()}`,
       gameId: session?.id || 0,
       symbol: session?.symbol || 'BTCUSDT',
@@ -754,34 +770,44 @@ const App: React.FC = () => {
       pnl: 0,
       reason
     };
+  };
+
+  // Only Analyze, don't execute
+  // This just returns the analysis string without creating a DB record or setting activeTrade
+  const handleAnalyzeTrade = async (reason: string, tp: number, sl: number): Promise<string> => {
+      setAiLoading(true);
+      const tempTrade = createTradeObject(reason, tp, sl);
+      const { ltfImage, htfImage } = getChartImages();
+      const visibleData = allCandles.slice(0, currentIndex + 1);
+      
+      const comment = await analyzeTrade(tempTrade, visibleData, ltfImage, htfImage, customPrompt);
+      setAiLoading(false);
+      return comment;
+  };
+
+  // Execute trade (optionally with pre-existing analysis)
+  const executeTrade = async (reason: string, tp: number, sl: number, preAnalysis?: string) => {
+    const newTrade = createTradeObject(reason, tp, sl);
 
     setActiveTrade(newTrade);
     setTradeHistory(prev => [newTrade, ...prev]);
 
     removeTradeShapes();
     drawOpenTradeMarkers(newTrade);
-
-    // AI Analysis
-    setAiLoading(true);
+    
     setViewingTrade(newTrade);
     setSidebarView('TRADE_PANEL');
     
-    const getChartImage = (chart: any) => {
-        if (!chart) return undefined;
-        try {
-            // @ts-ignore
-            if (typeof chart.getDataUrl === 'function') return chart.getDataUrl({ type: 'jpeg', backgroundColor: '#111827' });
-            // @ts-ignore
-            if (typeof chart.getConvertPictureUrl === 'function') return chart.getConvertPictureUrl(true, 'jpeg', '#111827');
-        } catch (e) { console.warn(e); }
-        return undefined;
-    };
+    let comment = preAnalysis;
 
-    const ltfImage = getChartImage(ltfChartInstance.current);
-    const htfImage = getChartImage(htfChartInstance.current);
-
-    const visibleData = allCandles.slice(0, currentIndex + 1);
-    const comment = await analyzeTrade(newTrade, visibleData, ltfImage, htfImage, customPrompt);
+    // If no pre-analysis exists, run it now
+    if (!comment) {
+        setAiLoading(true);
+        const { ltfImage, htfImage } = getChartImages();
+        const visibleData = allCandles.slice(0, currentIndex + 1);
+        comment = await analyzeTrade(newTrade, visibleData, ltfImage, htfImage, customPrompt);
+        setAiLoading(false);
+    }
     
     const updatedTrade = { ...newTrade, aiComment: comment };
     
@@ -791,8 +817,6 @@ const App: React.FC = () => {
     
     // Save open trade to DB
     await db.trades.add(newTrade);
-    
-    setAiLoading(false);
   };
   
   const loadHistoryAndShowPanel = async () => {
@@ -917,13 +941,10 @@ const App: React.FC = () => {
             
             {session && (
                  <div className="flex flex-col border-l border-gray-200 dark:border-gray-700 pl-3 ml-1 h-8 justify-center">
-                     <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-[10px] font-mono leading-none mb-0.5">
-                         <Calendar size={10} />
+                     <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-mono leading-none">
+                         <Calendar size={12} />
                          <span>{displayIndex + 1} / {allCandles.length}</span>
                      </div>
-                     <span className={`text-xs font-bold font-mono leading-none ${isReviewingHistory ? 'text-blue-500' : 'text-gray-800 dark:text-gray-200'}`}>
-                         {displayDate}
-                     </span>
                  </div>
             )}
 
@@ -1047,6 +1068,7 @@ const App: React.FC = () => {
                     <TradePanel 
                         onClose={() => setSidebarView('DASHBOARD')} 
                         onConfirm={executeTrade}
+                        onAnalyze={handleAnalyzeTrade}
                         currentPrice={allCandles[currentIndex]?.close || 0}
                         direction={modalDirection}
                         balance={balance}
