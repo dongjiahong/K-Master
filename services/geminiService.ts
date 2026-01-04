@@ -3,17 +3,19 @@ import { Trade, KLineData } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `
+const DEFAULT_SYSTEM_INSTRUCTION = `
 你是一位拥有20年经验的华尔街职业加密货币交易教练。你的风格是：
-1.  **犀利直接**：不要说废话，直接指出操作的优缺点。
-2.  **幽默风趣**：适当使用俏皮话、Emoji，让枯燥的交易变得有趣。
-3.  **Markdown高手**：使用 Markdown 格式美化输出。
+1. **犀利直接**：不要说废话，直接指出操作的优缺点。
+2. **幽默风趣**：适当使用俏皮话、Emoji，让枯燥的交易变得有趣。
+3. **Markdown高手**：使用 Markdown 格式美化输出。
     *   **加粗**重点内容。
     *   使用列表清晰表达。
     *   如果操作很烂，可以用 > 引用块嘲讽一下。
     *   如果操作很棒，用 🎉 庆祝。
-4.  **关注盈亏比与逻辑**：不仅看结果，更看入场逻辑是否符合 K 线形态（如吞没、Pinbar、突破等）和趋势。
-5.  **多模态分析**：我会提供 K 线图的截图，请结合图片中的形态（如均线排列、成交量变化、支撑阻力位）进行分析。
+4. **多模态分析**：我会提供 K 线图的截图，请结合图片中的形态（如均线排列、成交量变化、支撑阻力位）进行分析。
+5. **注重结构位置**： 结构位置和趋势是否合理更加重要。
+6. **关注盈亏比与逻辑**：不仅看结果，更看入场逻辑是否符合 K 线形态（如吞没、Pinbar、突破等）和趋势。
+7. **预测未来**：如果接下来价格走到 xx，形成yy，并出现 zz 信号那么可以做(多/空)，（止盈价格|止损价格)理由..
 `;
 
 // Helper to extract MIME type and data from Data URL
@@ -41,8 +43,14 @@ export const analyzeTrade = async (
     `T:${new Date(c.timestamp).toISOString().slice(11,16)} O:${c.open} H:${c.high} L:${c.low} C:${c.close} V:${c.volume}`
   ).join('\n');
 
+  // 如果用户提供了 customPrompt，则完全使用用户的 Prompt 作为 System Instruction
+  // 否则使用默认的 DEFAULT_SYSTEM_INSTRUCTION
+  const activeSystemInstruction = customPrompt && customPrompt.trim().length > 0 
+      ? customPrompt 
+      : DEFAULT_SYSTEM_INSTRUCTION;
+
   const textPrompt = `
-  ${customPrompt || "请评价我的这笔交易并进行打分(x/10)："}
+  请结合提供的 K 线图截图（包含大小周期）和数据，对这笔交易进行评价并打分(x/10)。
   
   **交易环境**:
   - 标的: ${trade.symbol}
@@ -58,7 +66,7 @@ export const analyzeTrade = async (
   **最近数据**:
   ${context}
   
-  请结合提供的 K 线图截图（包含大小周期）和上述数据，给出深刻的实时评价。重点关注：
+  重点关注：
   1. 大周期趋势是否配合？
   2. 入场位置是否合理？
   3. 成交量是否有异常？
@@ -86,9 +94,9 @@ export const analyzeTrade = async (
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview', // Updated to Gemini 3 Flash
-      contents: parts.length > 1 ? { parts } : textPrompt, // Fix structure for multimodal
+      contents: parts.length > 1 ? { parts } : textPrompt, 
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: activeSystemInstruction,
         temperature: 0.7,
       }
     });
@@ -100,12 +108,16 @@ export const analyzeTrade = async (
   }
 };
 
-export const generateGameReport = async (trades: Trade[]): Promise<string> => {
+export const generateGameReport = async (trades: Trade[], customPrompt?: string): Promise<string> => {
     if (trades.length === 0) return "你还没有做任何交易，这就是所谓 '空仓是最高的智慧' 吗？😂";
 
     const wins = trades.filter(t => t.pnl > 0).length;
     const totalPnl = trades.reduce((acc, t) => acc + t.pnl, 0);
     
+    const activeSystemInstruction = customPrompt && customPrompt.trim().length > 0 
+      ? customPrompt 
+      : DEFAULT_SYSTEM_INSTRUCTION;
+
     const prompt = `
     复盘总结时间！
     
@@ -124,7 +136,7 @@ export const generateGameReport = async (trades: Trade[]): Promise<string> => {
             model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
-                systemInstruction: SYSTEM_INSTRUCTION
+                systemInstruction: activeSystemInstruction
             }
         });
         return response.text || "无法生成报告。";

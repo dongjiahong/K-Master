@@ -366,7 +366,10 @@ const App: React.FC = () => {
     if (!session || !session.id) return;
     setIsGeneratingReport(true);
     if (activeTrade) await closeTrade(activeTrade, allCandles[currentIndex].close, 'CLOSED_MANUAL', allCandles[currentIndex].timestamp);
-    const report = await generateGameReport(tradeHistoryRef.current);
+    
+    // Pass customPrompt to report generation
+    const report = await generateGameReport(tradeHistoryRef.current, customPrompt);
+    
     setFinalReport(report);
     await db.games.update(session.id, { status: 'COMPLETED', finalBalance: balance, endTime: Date.now(), aiReport: report });
     const updatedSession = { ...session, status: 'COMPLETED' as const, aiReport: report };
