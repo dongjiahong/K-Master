@@ -85,8 +85,8 @@ export const analyzeTrade = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', // Switch to image-capable model
-      contents: parts.length > 1 ? parts : [{ text: textPrompt }], // Use array of parts if images exist
+      model: 'gemini-3-flash-preview', // Updated to Gemini 3 Flash
+      contents: parts.length > 1 ? { parts } : textPrompt, // Fix structure for multimodal
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.7,

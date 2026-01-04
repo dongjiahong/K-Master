@@ -115,7 +115,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                          <h3 className="font-bold text-indigo-700 dark:text-indigo-400 text-sm mb-3 flex items-center gap-2">
                              <Sparkles size={16} /> 🎓 AI 教练终局报告
                          </h3>
-                         <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed bg-indigo-50/50 dark:bg-indigo-900/10 p-3 rounded-lg">
+                         <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-indigo-50/50 dark:bg-indigo-900/10 p-3 rounded-lg">
                             <MarkdownRenderer content={finalReport} />
                          </div>
                      </div>

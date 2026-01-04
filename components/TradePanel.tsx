@@ -287,7 +287,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 </div>
                             </div>
                             <div className="text-center space-y-2 max-w-[90%]">
-                                <p className="text-indigo-600 dark:text-indigo-300 font-bold text-xs animate-pulse">{loadingMsg}</p>
+                                <p className="text-indigo-600 dark:text-indigo-300 font-bold text-sm animate-pulse">{loadingMsg}</p>
                                 <div className="flex gap-1.5 justify-center mt-2">
                                     <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                                     <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -296,17 +296,17 @@ const TradePanel: React.FC<TradePanelProps> = ({
                             </div>
                         </div>
                     ) : (localAnalysis || (isViewMode && viewingTrade?.aiComment)) ? (
-                        <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed animate-in fade-in slide-in-from-bottom-2">
+                        <div className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed animate-in fade-in slide-in-from-bottom-2">
                              <MarkdownRenderer content={localAnalysis || viewingTrade?.aiComment || ""} />
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-2 opacity-60">
                              {isViewMode ? (
-                                <span className="text-xs">暂无 AI 分析记录</span>
+                                <span className="text-sm">暂无 AI 分析记录</span>
                              ) : (
                                 <>
                                     <Sparkles size={32} className="mb-2 text-indigo-300 dark:text-indigo-700"/>
-                                    <span className="text-xs text-center px-8 font-bold">建议先点击顶部 'AI 分析' 获取策略</span>
+                                    <span className="text-sm text-center px-8 font-bold">建议先点击顶部 'AI 分析' 获取策略</span>
                                     <span className="text-[10px] text-center px-8">Analysis First, Execute Later</span>
                                 </>
                              )}
