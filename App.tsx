@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KLineData, Timeframe, Trade, GameSession } from './types';
 import { getHigherTimeframe, fetchMarketData, timeframeToMs, generateRandomMarketEndTime } from './services/binanceService';
 import { analyzeTrade, generateGameReport } from './services/geminiService';
@@ -170,6 +170,32 @@ const App: React.FC = () => {
       // Update State (Trigger Render)
       setCurrentHtfCandle(nextHtfCandle);
   }, []);
+
+  // --- Helper: Reconstruct HTF from LTF for Review/Resume ---
+  const calculateHtfFromLtf = (ltfData: KLineData[], index: number, htfTf: Timeframe): KLineData | null => {
+      if (index < 0 || ltfData.length === 0) return null;
+      const current = ltfData[index];
+      const htfMs = timeframeToMs(htfTf);
+      const htfStart = Math.floor(current.timestamp / htfMs) * htfMs;
+      
+      // Look back to find start
+      const relevant = [];
+      for (let i = index; i >= 0; i--) {
+          if (ltfData[i].timestamp < htfStart) break;
+          relevant.unshift(ltfData[i]);
+      }
+      if (relevant.length === 0) return null;
+      
+      const res = { ...relevant[0], timestamp: htfStart, volume: 0, turnover: 0 };
+      res.close = relevant[relevant.length - 1].close; // Close is last
+      relevant.forEach(c => {
+          res.high = Math.max(res.high, c.high);
+          res.low = Math.min(res.low, c.low);
+          res.volume += c.volume;
+          if(c.turnover) res.turnover = (res.turnover || 0) + c.turnover;
+      });
+      return res;
+  };
 
   // --- Game Loop ---
   const nextCandle = useCallback(() => {
@@ -397,6 +423,7 @@ const App: React.FC = () => {
       setAiLoading(false);
       return comment;
   };
+  
   const handleReviewTrade = (trade: Trade) => {
       setIsPlaying(false);
       if (!isReviewingHistory) lastPlayedIndexRef.current = currentIndex;
@@ -410,14 +437,15 @@ const App: React.FC = () => {
           
           // Update HTF context for review
           const htf = getHigherTimeframe(session!.timeframe);
-          const htfMs = timeframeToMs(htf);
-          const tradeHtfStart = Math.floor(trade.entryTime / htfMs) * htfMs;
-          const reviewHtfCandle = htfHistory.find(h => h.timestamp === tradeHtfStart) 
-            || { timestamp: tradeHtfStart, open: trade.entryPrice, high: trade.entryPrice, low: trade.entryPrice, close: trade.entryPrice, volume: 0 };
+          // Use calculateHtfFromLtf to get the exact partial candle state at that moment
+          const reviewHtfCandle = calculateHtfFromLtf(allCandles, tradeIndex, htf)
+             || { timestamp: Math.floor(trade.entryTime / timeframeToMs(htf)) * timeframeToMs(htf), open: trade.entryPrice, high: trade.entryPrice, low: trade.entryPrice, close: trade.entryPrice, volume: 0, turnover: 0 };
+          
           setCurrentHtfCandle(reviewHtfCandle);
-          htfCandleLogicRef.current = reviewHtfCandle; // Sync Ref for review logic
+          htfCandleLogicRef.current = reviewHtfCandle; 
       }
   };
+
   const handleBackToLive = () => {
       const resumeIndex = lastPlayedIndexRef.current;
       setCurrentIndex(resumeIndex);
@@ -432,32 +460,6 @@ const App: React.FC = () => {
           setCurrentHtfCandle(restoredHtf);
           htfCandleLogicRef.current = restoredHtf;
       }
-  };
-  
-  // Helper to reconstruct HTF candle from LTF series (for resuming/switching back)
-  const calculateHtfFromLtf = (ltfData: KLineData[], index: number, htfTf: Timeframe): KLineData | null => {
-      if (index < 0 || ltfData.length === 0) return null;
-      const current = ltfData[index];
-      const htfMs = timeframeToMs(htfTf);
-      const htfStart = Math.floor(current.timestamp / htfMs) * htfMs;
-      
-      // Look back to find start
-      const relevant = [];
-      for (let i = index; i >= 0; i--) {
-          if (ltfData[i].timestamp < htfStart) break;
-          relevant.unshift(ltfData[i]);
-      }
-      if (relevant.length === 0) return null;
-      
-      const res = { ...relevant[0], timestamp: htfStart, volume: 0, turnover: 0 };
-      res.close = relevant[relevant.length - 1].close; // Close is last
-      relevant.forEach(c => {
-          res.high = Math.max(res.high, c.high);
-          res.low = Math.min(res.low, c.low);
-          res.volume += c.volume;
-          if(c.turnover) res.turnover = (res.turnover || 0) + c.turnover;
-      });
-      return res;
   };
 
   const loadComparisonStats = async (currentSession: GameSession) => {
@@ -492,6 +494,13 @@ const App: React.FC = () => {
       if (isMobile) setShowMobileSidebar(true);
   };
 
+  // --- Computed HTF History for Display ---
+  // Filters out any completed HTF candles that are ahead of the current simulation time
+  const displayedHtfHistory = useMemo(() => {
+    if (!currentHtfCandle) return htfHistory;
+    return htfHistory.filter(h => h.timestamp < currentHtfCandle.timestamp);
+  }, [htfHistory, currentHtfCandle]);
+
   // --- Render ---
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden transition-colors duration-300">
@@ -512,7 +521,7 @@ const App: React.FC = () => {
           theme={theme}
           session={session}
           ltfData={allCandles.slice(0, currentIndex + 1)}
-          htfData={htfHistory}
+          htfData={displayedHtfHistory}
           currentHtfCandle={currentHtfCandle}
           trades={tradeHistory}
           isReviewingHistory={isReviewingHistory}
