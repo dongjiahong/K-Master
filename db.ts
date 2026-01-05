@@ -8,10 +8,27 @@ export interface UserSettings {
   updatedAt: number;    // 更新时间
 }
 
+// API Key 记录接口
+export interface ApiKeyRecord {
+  id: string;           // 唯一标识 (uuid)
+  key: string;          // API Key
+  createdAt: number;    // 创建时间
+}
+
+// API Key 使用记录接口（按日期统计）
+export interface ApiKeyUsage {
+  id: string;           // keyId + date 组合
+  keyId: string;        // 关联的 API Key ID
+  date: string;         // 日期 (YYYY-MM-DD)
+  count: number;        // 使用次数
+}
+
 export class TradingSimDB extends Dexie {
   games!: Table<GameSession>;
   trades!: Table<Trade>;
   settings!: Table<UserSettings>;
+  apiKeys!: Table<ApiKeyRecord>;
+  apiKeyUsage!: Table<ApiKeyUsage>;
 
   constructor() {
     super('KLineMasterDB');
@@ -25,6 +42,14 @@ export class TradingSimDB extends Dexie {
       games: '++id, startTime, status, symbol, marketEndTime, parentSessionId',
       trades: 'id, gameId, status, entryTime',
       settings: 'key, updatedAt'
+    });
+    // Version 4: Added apiKeys and apiKeyUsage tables for multi-key management
+    (this as any).version(4).stores({
+      games: '++id, startTime, status, symbol, marketEndTime, parentSessionId',
+      trades: 'id, gameId, status, entryTime',
+      settings: 'key, updatedAt',
+      apiKeys: 'id, createdAt',
+      apiKeyUsage: 'id, keyId, date'
     });
   }
 }

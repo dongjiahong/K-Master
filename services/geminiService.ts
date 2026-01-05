@@ -1,7 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { Trade, KLineData } from '../types';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { getAvailableKey, recordUsage, markKeyAsExhausted } from './apiKeyService';
 
 const DEFAULT_SYSTEM_INSTRUCTION = `
 你是一位拥有20年经验的华尔街职业加密货币交易教练。你的风格是：
@@ -91,9 +90,16 @@ export const analyzeTrade = async (
     }
   }
 
+  // 动态获取可用的 API Key
+  const availableKey = await getAvailableKey();
+  if (!availableKey) {
+    return "⚠️ 没有可用的 API Key，请在设置中添加，或所有 Key 今日已达使用上限。";
+  }
+
   try {
+    const ai = new GoogleGenAI({ apiKey: availableKey.key });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Updated to Gemini 3 Flash
+      model: 'gemini-3-flash-preview',
       contents: parts.length > 1 ? { parts } : textPrompt, 
       config: {
         systemInstruction: activeSystemInstruction,
@@ -101,9 +107,17 @@ export const analyzeTrade = async (
       }
     });
     
+    // 记录使用次数
+    await recordUsage(availableKey.id);
+    
     return response.text || "AI 正在思考人生，暂时无法评价...";
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    // 如果是 429 错误，标记该 key 今日已用完
+    if (error?.status === 429 || error?.message?.includes('429')) {
+      await markKeyAsExhausted(availableKey.id);
+      return "⚠️ 当前 API Key 已达调用限制 (429)，请稍后重试或添加更多 Key。";
+    }
     return "AI 教练掉线了 (API Error)，请检查网络或 Key。";
   }
 };
@@ -131,7 +145,14 @@ export const generateGameReport = async (trades: Trade[], customPrompt?: string)
     请给这位交易员写一份终局总结报告，包含评分（S/A/B/C/D）和改进建议。
     `;
 
+    // 动态获取可用的 API Key
+    const availableKey = await getAvailableKey();
+    if (!availableKey) {
+      return "⚠️ 没有可用的 API Key，请在设置中添加，或所有 Key 今日已达使用上限。";
+    }
+
     try {
+        const ai = new GoogleGenAI({ apiKey: availableKey.key });
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
@@ -139,8 +160,18 @@ export const generateGameReport = async (trades: Trade[], customPrompt?: string)
                 systemInstruction: activeSystemInstruction
             }
         });
+        
+        // 记录使用次数
+        await recordUsage(availableKey.id);
+        
         return response.text || "无法生成报告。";
-    } catch (e) {
+    } catch (error: any) {
+        console.error("Gemini API Error:", error);
+        // 如果是 429 错误，标记该 key 今日已用完
+        if (error?.status === 429 || error?.message?.includes('429')) {
+          await markKeyAsExhausted(availableKey.id);
+          return "⚠️ 当前 API Key 已达调用限制 (429)，请稍后重试或添加更多 Key。";
+        }
         return "报告生成失败。";
     }
 }
