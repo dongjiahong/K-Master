@@ -96,12 +96,20 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
                                     场景 ID: {key.slice(-6)} · 尝试次数: {count}
                                 </div>
                             </div>
-                            <button 
-                                onClick={(e) => handleDeleteClick(e, sessions)}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button 
+                                    onClick={() => onReplay(latestSession)}
+                                    className="px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center gap-1"
+                                >
+                                    <Repeat size={12} /> 重玩
+                                </button>
+                                <button 
+                                    onClick={(e) => handleDeleteClick(e, sessions)}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Session List */}
@@ -122,20 +130,12 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
                                             </span>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={() => onReview(s)}
-                                                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-1"
-                                            >
-                                                <Eye size={12} /> 回顾
-                                            </button>
-                                            <button 
-                                                onClick={() => onReplay(s)}
-                                                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center gap-1"
-                                            >
-                                                <Repeat size={12} /> 重玩
-                                            </button>
-                                        </div>
+                                        <button 
+                                            onClick={() => onReview(s)}
+                                            className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-1"
+                                        >
+                                            <Eye size={12} /> 回顾
+                                        </button>
                                     </div>
                                 );
                             })}

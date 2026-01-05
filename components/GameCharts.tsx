@@ -242,16 +242,16 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       trades.forEach((t) => {
         // 1. Entry marker and lines for OPEN Trades
         if (t.status === "OPEN") {
-          // 入场点标记 - 使用 simpleAnnotation 绘制三角形
+          // 入场点标记 - 使用红绿圆球区分多空
           const entryArrowOverlay = {
             name: "simpleAnnotation",
             id: `entry_arrow_${t.id}`,
             points: [{ timestamp: t.entryTime, value: t.entryPrice }],
             styles: {
               symbol: {
-                type: t.direction === "LONG" ? "triangle" : "diamond",
+                type: "circle",
                 color: t.direction === "LONG" ? "#2ebd85" : "#f6465d",
-                size: 10,
+                size: 12,
               },
             },
             lock: true,
@@ -311,19 +311,19 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         }
         // 2. Entry + Exit Markers for Closed Trades
         else if (t.exitPrice && t.exitTime) {
-          // 入场点标记（已关闭的交易）
+          // 入场点标记（已关闭的交易）- 使用红绿圆球区分多空
           const closedEntryArrow = {
             name: "simpleAnnotation",
             id: `closed_entry_arrow_${t.id}`,
             points: [{ timestamp: t.entryTime, value: t.entryPrice }],
             styles: {
               symbol: {
-                type: t.direction === "LONG" ? "triangle" : "diamond",
+                type: "circle",
                 color:
                   t.direction === "LONG"
-                    ? "rgba(46, 189, 133, 0.5)"
-                    : "rgba(246, 70, 93, 0.5)",
-                size: 8,
+                    ? "rgba(46, 189, 133, 0.6)"
+                    : "rgba(246, 70, 93, 0.6)",
+                size: 10,
               },
             },
             lock: true,

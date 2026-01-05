@@ -577,7 +577,15 @@ const App: React.FC = () => {
                      <GameHistoryPanel 
                         onClose={() => isMobile ? setShowMobileSidebar(false) : setSidebarView('DASHBOARD')}
                         sessions={pastSessions} tradesByGame={pastTrades}
-                        onReplay={(s) => { handleLoadSession(s); setShowMobileSidebar(false); }}
+                        onReplay={(s) => { 
+                            startNewGame({ 
+                                symbol: s.symbol, 
+                                timeframe: s.timeframe, 
+                                marketEndTime: s.marketEndTime, 
+                                parentId: s.id 
+                            }); 
+                            setShowMobileSidebar(false); 
+                        }}
                         onReview={handleLoadSession} onDelete={handleDeleteHistory}
                      />
                  )}
