@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   Play, Pause, ChevronRight, TrendingUp, TrendingDown, 
-  Settings, History, Zap, Trophy, Calendar, Menu
+  Settings, History, Zap, Trophy, Calendar, Menu,
+  CircleDollarSign, XCircle
 } from 'lucide-react';
 import { GameSession, Trade } from '../types';
 
@@ -17,6 +18,8 @@ interface HeaderProps {
   setAutoPlaySpeed: (val: number) => void;
   activeTrade: Trade | null;
   handleOpenTradeModal: (dir: 'LONG' | 'SHORT') => void;
+  handleManualTakeProfit: () => void;
+  handleManualStopLoss: () => void;
   loadHistoryAndShowPanel: () => void;
   setSidebarView: (view: any) => void;
   isMobile: boolean;
@@ -26,8 +29,8 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({
   session, isPlaying, setIsPlaying, isReviewingHistory, nextCandle,
   currentDisplayIndex, totalCandles, autoPlaySpeed, setAutoPlaySpeed,
-  activeTrade, handleOpenTradeModal, loadHistoryAndShowPanel, setSidebarView,
-  isMobile, onToggleSidebar
+  activeTrade, handleOpenTradeModal, handleManualTakeProfit, handleManualStopLoss,
+  loadHistoryAndShowPanel, setSidebarView, isMobile, onToggleSidebar
 }) => {
   return (
     <header className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 bg-white dark:bg-gray-950 shrink-0 gap-4 transition-colors">
@@ -97,22 +100,47 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-3">
-           <div className="flex gap-2">
-              <button 
-                  onClick={() => handleOpenTradeModal('LONG')}
-                  disabled={!!activeTrade || session?.status === 'COMPLETED' || isReviewingHistory}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-trade-profit hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(46,189,133,0.3)]"
-              >
-                  <TrendingUp size={16} /> <span className="hidden sm:inline">Long</span>
-              </button>
-              <button 
-                  onClick={() => handleOpenTradeModal('SHORT')}
-                  disabled={!!activeTrade || session?.status === 'COMPLETED' || isReviewingHistory}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-trade-loss hover:bg-rose-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(246,70,93,0.3)]"
-              >
-                  <TrendingDown size={16} /> <span className="hidden sm:inline">Short</span>
-              </button>
-           </div>
+           {/* 开仓按钮 - 没有持仓时显示 */}
+           {!activeTrade && (
+             <div className="flex gap-2">
+                <button 
+                    onClick={() => handleOpenTradeModal('LONG')}
+                    disabled={session?.status === 'COMPLETED' || isReviewingHistory}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-trade-profit hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(46,189,133,0.3)]"
+                >
+                    <TrendingUp size={16} /> <span className="hidden sm:inline">Long</span>
+                </button>
+                <button 
+                    onClick={() => handleOpenTradeModal('SHORT')}
+                    disabled={session?.status === 'COMPLETED' || isReviewingHistory}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-trade-loss hover:bg-rose-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(246,70,93,0.3)]"
+                >
+                    <TrendingDown size={16} /> <span className="hidden sm:inline">Short</span>
+                </button>
+             </div>
+           )}
+           
+           {/* 止盈止损按钮 - 有持仓时显示 */}
+           {activeTrade && (
+             <div className="flex gap-2">
+                <button 
+                    onClick={handleManualTakeProfit}
+                    disabled={session?.status === 'COMPLETED' || isReviewingHistory}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(46,189,133,0.4)] animate-pulse"
+                    title="手动止盈平仓"
+                >
+                    <CircleDollarSign size={16} /> <span className="hidden sm:inline">止盈</span>
+                </button>
+                <button 
+                    onClick={handleManualStopLoss}
+                    disabled={session?.status === 'COMPLETED' || isReviewingHistory}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(246,70,93,0.4)] animate-pulse"
+                    title="手动止损平仓"
+                >
+                    <XCircle size={16} /> <span className="hidden sm:inline">止损</span>
+                </button>
+             </div>
+           )}
           
           {!isMobile && (
             <>

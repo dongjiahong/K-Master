@@ -260,6 +260,19 @@ const App: React.FC = () => {
     await db.trades.put(closedTrade);
   };
 
+  // --- Manual Take Profit / Stop Loss ---
+  const handleManualTakeProfit = () => {
+    if (!activeTrade) return;
+    const currentCandle = allCandles[currentIndex];
+    closeTrade(activeTrade, currentCandle.close, 'CLOSED_TP', currentCandle.timestamp);
+  };
+
+  const handleManualStopLoss = () => {
+    if (!activeTrade) return;
+    const currentCandle = allCandles[currentIndex];
+    closeTrade(activeTrade, currentCandle.close, 'CLOSED_SL', currentCandle.timestamp);
+  };
+
   // --- Start Game Logic ---
   const startNewGame = async (replayConfig?: { symbol: string, timeframe: Timeframe, marketEndTime: number, parentId?: number }, resumeSession?: GameSession) => {
     setLoading(true);
@@ -513,6 +526,8 @@ const App: React.FC = () => {
         currentDisplayIndex={currentIndex} totalCandles={allCandles.length}
         autoPlaySpeed={autoPlaySpeed} setAutoPlaySpeed={setAutoPlaySpeed}
         activeTrade={activeTrade} handleOpenTradeModal={handleOpenTradeModal}
+        handleManualTakeProfit={handleManualTakeProfit}
+        handleManualStopLoss={handleManualStopLoss}
         loadHistoryAndShowPanel={loadHistoryAndShowPanel} setSidebarView={setSidebarView}
         isMobile={isMobile} onToggleSidebar={() => setShowMobileSidebar(!showMobileSidebar)}
       />
