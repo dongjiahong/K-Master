@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { KLineData, Timeframe, Trade, GameSession } from './types';
 import { getHigherTimeframe, fetchMarketData, timeframeToMs, generateRandomMarketEndTime } from './services/binanceService';
 import { analyzeTrade, generateGameReport } from './services/geminiService';
-import { db } from './db';
+import { db, getSetting, saveSetting, SETTINGS_KEYS } from './db';
 
 import TradePanel from './components/TradePanel';
 import GameHistoryPanel from './components/GameHistoryPanel';
@@ -64,7 +64,7 @@ const App: React.FC = () => {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [finalReport, setFinalReport] = useState<string | null>(null);
   const [comparisonStats, setComparisonStats] = useState<any[]>([]);
-  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [customPrompt, setCustomPromptState] = useState<string>('');
   
   // Modals
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -115,6 +115,23 @@ const App: React.FC = () => {
     };
     checkActiveSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 从 IndexedDB 加载用户设置
+  useEffect(() => {
+    const loadSettings = async () => {
+      const savedPrompt = await getSetting(SETTINGS_KEYS.CUSTOM_PROMPT);
+      if (savedPrompt) {
+        setCustomPromptState(savedPrompt);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // 包装 setCustomPrompt，自动保存到 IndexedDB
+  const setCustomPrompt = useCallback((value: string) => {
+    setCustomPromptState(value);
+    saveSetting(SETTINGS_KEYS.CUSTOM_PROMPT, value);
   }, []);
 
   // --- Logic: HTF Calculation ---
