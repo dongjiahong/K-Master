@@ -140,13 +140,19 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
   // Handle "Execute" click
   const handleExecuteClick = () => {
+    console.log('Execute clicked', { reason, tp, sl, onConfirm: !!onConfirm });
     if (!reason.trim()) {
       alert('请填写下单理由');
       return;
     }
-    if (onConfirm) {
-        onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis.length > 0 ? localAnalysis : undefined);
+    if (!onConfirm) {
+      console.error('onConfirm is not defined - likely in view mode');
+      alert('当前处于查看模式，无法下单');
+      return;
     }
+    console.log('Executing trade with:', { reason, tp: parseFloat(tp), sl: parseFloat(sl) });
+    onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis.length > 0 ? localAnalysis : undefined);
+    alert('下单成功！');
   };
 
   const themeColor = activeDirection === 'LONG' ? 'text-trade-profit' : 'text-trade-loss';
