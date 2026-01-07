@@ -3,10 +3,13 @@ import { FileText, TrendingUp, TrendingDown, Bot, Target, Hash, Percent, ArrowLe
 import { Trade } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 
+type OrderType = 'MARKET' | 'LIMIT';
+
 interface TradePanelProps {
   onClose: () => void; // Now acts as "Back"
   // Create Mode Props
   onConfirm?: (reason: string, tp: number, sl: number, preAnalysis?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]) => void;
+  onCreatePendingOrder?: (triggerPrice: number, tp: number, sl: number, reason: string) => void;
   onAnalyze?: (reason: string, tp: number, sl: number) => Promise<string>;
   currentPrice?: number;
   direction?: 'LONG' | 'SHORT';
@@ -16,7 +19,7 @@ interface TradePanelProps {
   // AI Status
   isLoading?: boolean;
   // 预览回调：实时上报止盈止损价格给父组件
-  onPreviewChange?: (tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT') => void;
+  onPreviewChange?: (tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null) => void;
 }
 
 // 不再使用预制模板，用户必须手动填写下单理由
@@ -24,6 +27,7 @@ interface TradePanelProps {
 const TradePanel: React.FC<TradePanelProps> = ({ 
   onClose, 
   onConfirm,
+  onCreatePendingOrder,
   onAnalyze,
   currentPrice = 0, 
   direction = 'LONG',
@@ -35,6 +39,8 @@ const TradePanel: React.FC<TradePanelProps> = ({
   const [reason, setReason] = useState('');
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
+  const [orderType, setOrderType] = useState<OrderType>('MARKET');
+  const [entryPrice, setEntryPrice] = useState('');
   
   // UI States
   // 默认展开，分析完后自动收起以展示 AI 结果
@@ -70,7 +76,9 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
   const isViewMode = !!viewingTrade;
   const activeDirection = isViewMode ? viewingTrade.direction : direction;
-  const activePrice = isViewMode ? viewingTrade.entryPrice : currentPrice;
+  // 限价模式下使用用户输入的入场价，否则使用当前市价
+  const numEntryPrice = parseFloat(entryPrice) || currentPrice;
+  const activePrice = isViewMode ? viewingTrade.entryPrice : (orderType === 'LIMIT' ? numEntryPrice : currentPrice);
 
   // Calculate Derived Stats
   const numTp = parseFloat(tp) || activePrice;
@@ -104,18 +112,21 @@ const TradePanel: React.FC<TradePanelProps> = ({
                  setTp((currentPrice - dist * 2).toFixed(2));
                  setSl((currentPrice + dist).toFixed(2));
              }
+             // 初始化入场价为当前市价
+             setEntryPrice(currentPrice.toFixed(2));
           }
       }
   }, [isViewMode, viewingTrade, currentPrice, direction]);
 
-  // 监听 tp/sl 变化，实时上报预览价格给父组件
+  // 监听 tp/sl/entryPrice 变化，实时上报预览价格给父组件
   useEffect(() => {
     if (!isViewMode && onPreviewChange) {
       const numTp = parseFloat(tp) || null;
       const numSl = parseFloat(sl) || null;
-      onPreviewChange(numTp, numSl, activeDirection);
+      const numEntry = orderType === 'LIMIT' ? (parseFloat(entryPrice) || null) : null;
+      onPreviewChange(numTp, numSl, activeDirection, numEntry);
     }
-  }, [tp, sl, activeDirection, isViewMode, onPreviewChange]);
+  }, [tp, sl, entryPrice, orderType, activeDirection, isViewMode, onPreviewChange]);
 
   // 组件卸载时清除预览
   useEffect(() => {
@@ -139,14 +150,12 @@ const TradePanel: React.FC<TradePanelProps> = ({
       }
   };
 
-  // Handle "Execute" click
+  // Handle "Execute" click (市价单)
   const handleExecuteClick = () => {
-    setErrorMsg(null); // 清除之前的错误
-    console.log('Execute clicked', { reason, tp, sl, onConfirm: !!onConfirm });
+    setErrorMsg(null);
     
     if (!reason.trim()) {
       setErrorMsg('⚠️ 请填写下单理由！');
-      // 3秒后自动清除提示
       setTimeout(() => setErrorMsg(null), 3000);
       return;
     }
@@ -156,8 +165,30 @@ const TradePanel: React.FC<TradePanelProps> = ({
       setTimeout(() => setErrorMsg(null), 3000);
       return;
     }
-    console.log('Executing trade with:', { reason, tp: parseFloat(tp), sl: parseFloat(sl) });
     onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis.length > 0 ? localAnalysis : undefined);
+  };
+
+  // Handle "Place Limit Order" click (限价单挂单)
+  const handlePlaceLimitOrder = () => {
+    setErrorMsg(null);
+    
+    if (!reason.trim()) {
+      setErrorMsg('⚠️ 请填写挂单理由！');
+      setTimeout(() => setErrorMsg(null), 3000);
+      return;
+    }
+    const triggerPrice = parseFloat(entryPrice);
+    if (!triggerPrice || triggerPrice <= 0) {
+      setErrorMsg('⚠️ 请输入有效的入场价格！');
+      setTimeout(() => setErrorMsg(null), 3000);
+      return;
+    }
+    if (!onCreatePendingOrder) {
+      setErrorMsg('挂单功能未启用');
+      setTimeout(() => setErrorMsg(null), 3000);
+      return;
+    }
+    onCreatePendingOrder(triggerPrice, parseFloat(tp), parseFloat(sl), reason);
   };
 
   const themeColor = activeDirection === 'LONG' ? 'text-trade-profit' : 'text-trade-loss';
@@ -183,6 +214,30 @@ const TradePanel: React.FC<TradePanelProps> = ({
              {/* Header Actions (Right Side) */}
              {!isViewMode && (
                  <div className="flex items-center gap-2">
+                     {/* 订单类型切换 */}
+                     <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+                         <button
+                            onClick={() => setOrderType('MARKET')}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
+                                orderType === 'MARKET' 
+                                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                         >
+                            市价
+                         </button>
+                         <button
+                            onClick={() => setOrderType('LIMIT')}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
+                                orderType === 'LIMIT' 
+                                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                         >
+                            限价
+                         </button>
+                     </div>
+                     
                      <button
                         onClick={handleAnalyzeClick}
                         disabled={isLoading}
@@ -193,12 +248,12 @@ const TradePanel: React.FC<TradePanelProps> = ({
                      </button>
                      
                      <button
-                        onClick={handleExecuteClick}
+                        onClick={orderType === 'MARKET' ? handleExecuteClick : handlePlaceLimitOrder}
                         disabled={isLoading}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${themeBg} text-white font-bold text-xs hover:opacity-90 transition-all shadow-md active:scale-95 disabled:opacity-50`}
                      >
                         <Zap size={14} fill="currentColor"/>
-                        <span>执行下单</span>
+                        <span>{orderType === 'MARKET' ? '执行下单' : '挂单'}</span>
                      </button>
                  </div>
              )}
@@ -216,9 +271,28 @@ const TradePanel: React.FC<TradePanelProps> = ({
                     <div className="space-y-4 shrink-0">
                         {/* Stats Grid */}
                         <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
-                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Target size={10}/> 入场价</span>
-                                <span className="text-sm font-mono font-bold text-gray-900 dark:text-white">{activePrice.toFixed(2)}</span>
+                            {/* 入场价：限价模式可编辑，市价模式只读 */}
+                            <div className={`bg-gray-50 dark:bg-gray-900 p-2 rounded border ${
+                                !isViewMode && orderType === 'LIMIT' 
+                                    ? 'border-amber-300 dark:border-amber-700' 
+                                    : 'border-gray-200 dark:border-gray-800'
+                            }`}>
+                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1">
+                                    <Target size={10}/> 
+                                    {orderType === 'LIMIT' && !isViewMode ? '限价入场' : '入场价'}
+                                </span>
+                                {!isViewMode && orderType === 'LIMIT' ? (
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={entryPrice}
+                                        onChange={(e) => setEntryPrice(e.target.value)}
+                                        className="bg-transparent text-sm font-mono font-bold text-amber-600 dark:text-amber-400 outline-none w-full"
+                                        placeholder={currentPrice.toFixed(2)}
+                                    />
+                                ) : (
+                                    <span className="text-sm font-mono font-bold text-gray-900 dark:text-white">{activePrice.toFixed(2)}</span>
+                                )}
                             </div>
                             <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
                                 <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Hash size={10}/> 数量</span>

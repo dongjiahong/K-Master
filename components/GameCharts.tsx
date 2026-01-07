@@ -5,7 +5,7 @@ import React, {
   forwardRef,
 } from "react";
 import { init, dispose, Chart, ActionType, LineType } from "klinecharts";
-import { KLineData, Timeframe, GameSession, Trade } from "../types";
+import { KLineData, Timeframe, GameSession, Trade, PendingOrder } from "../types";
 import { getHigherTimeframe } from "../services/binanceService";
 import { FastForward } from "lucide-react";
 
@@ -16,11 +16,12 @@ interface GameChartsProps {
   htfData: KLineData[];
   currentHtfCandle: KLineData | null;
   trades: Trade[]; // To redraw markers
+  pendingOrders?: PendingOrder[];  // 挂单列表
   isReviewingHistory: boolean;
   onBackToLive: () => void;
   onCandleClick: (timestamp: number) => void;
   // 预览止盈止损价格（下单面板中实时输入）
-  previewPrices?: { tp: number | null; sl: number | null; direction: 'LONG' | 'SHORT' } | null;
+  previewPrices?: { tp: number | null; sl: number | null; direction: 'LONG' | 'SHORT'; entryPrice?: number | null } | null;
 }
 
 export interface GameChartsRef {
@@ -36,6 +37,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       htfData,
       currentHtfCandle,
       trades,
+      pendingOrders = [],
       isReviewingHistory,
       onBackToLive,
       onCandleClick,
@@ -247,6 +249,26 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       if (previewPrices && ltfData.length > 0) {
         const currentTime = ltfData[ltfData.length - 1].timestamp;
         
+        // 限价入场价预览线
+        if (previewPrices.entryPrice) {
+          const entryOverlay = {
+            id: 'preview_entry',
+            name: 'horizontalStraightLine',
+            points: [{ timestamp: currentTime, value: previewPrices.entryPrice }],
+            styles: {
+              line: {
+                color: 'rgba(251, 191, 36, 0.8)', // amber
+                style: LineType.Dashed,
+                dashedValue: [8, 4],
+                size: 2,
+              },
+            },
+            lock: true,
+          };
+          ltfChartInstance.current?.createOverlay(entryOverlay);
+          htfChartInstance.current?.createOverlay(entryOverlay);
+        }
+        
         if (previewPrices.tp) {
           const tpOverlay = {
             id: 'preview_tp',
@@ -419,7 +441,67 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
           ltfChartInstance.current?.createOverlay(connectionLine);
         }
       });
-    }, [trades, previewPrices, ltfData]);
+
+      // 绘制挂单价格线（待触发的限价单）
+      pendingOrders.filter(o => o.status === 'PENDING').forEach((order) => {
+        if (ltfData.length === 0) return;
+        const currentTime = ltfData[ltfData.length - 1].timestamp;
+        
+        // 入场触发价格线（橙色虚线）
+        const pendingEntryOverlay = {
+          id: `pending_entry_${order.id}`,
+          name: 'horizontalStraightLine',
+          points: [{ timestamp: currentTime, value: order.triggerPrice }],
+          styles: {
+            line: {
+              color: order.direction === 'LONG' ? 'rgba(251, 191, 36, 0.8)' : 'rgba(251, 146, 60, 0.8)',
+              style: LineType.Dashed,
+              dashedValue: [8, 4],
+              size: 2,
+            },
+          },
+          lock: true,
+        };
+        ltfChartInstance.current?.createOverlay(pendingEntryOverlay);
+        htfChartInstance.current?.createOverlay(pendingEntryOverlay);
+        
+        // 止盈线（绿色虚线，较淡）
+        const pendingTpOverlay = {
+          id: `pending_tp_${order.id}`,
+          name: 'horizontalStraightLine',
+          points: [{ timestamp: currentTime, value: order.tp }],
+          styles: {
+            line: {
+              color: 'rgba(46, 189, 133, 0.4)',
+              style: LineType.Dashed,
+              dashedValue: [4, 4],
+              size: 1,
+            },
+          },
+          lock: true,
+        };
+        ltfChartInstance.current?.createOverlay(pendingTpOverlay);
+        htfChartInstance.current?.createOverlay(pendingTpOverlay);
+        
+        // 止损线（红色虚线，较淡）
+        const pendingSlOverlay = {
+          id: `pending_sl_${order.id}`,
+          name: 'horizontalStraightLine',
+          points: [{ timestamp: currentTime, value: order.sl }],
+          styles: {
+            line: {
+              color: 'rgba(246, 70, 93, 0.4)',
+              style: LineType.Dashed,
+              dashedValue: [4, 4],
+              size: 1,
+            },
+          },
+          lock: true,
+        };
+        ltfChartInstance.current?.createOverlay(pendingSlOverlay);
+        htfChartInstance.current?.createOverlay(pendingSlOverlay);
+      });
+    }, [trades, pendingOrders, previewPrices, ltfData]);
 
     return (
       <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">

@@ -53,3 +53,18 @@ export interface AIResponse {
   comment: string;
   score: number; // 1-10
 }
+
+// 限价挂单
+export interface PendingOrder {
+  id: string;
+  gameId: number;
+  symbol: string;
+  direction: 'LONG' | 'SHORT';
+  orderType: 'LIMIT';
+  triggerPrice: number;  // 触发价格（限价单入场价）
+  tp: number;
+  sl: number;
+  reason: string;
+  createdAt: number;
+  status: 'PENDING' | 'TRIGGERED' | 'CANCELLED';
+}

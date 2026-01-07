@@ -1,17 +1,20 @@
 import { db, ApiKeyRecord, ApiKeyUsage } from '../db';
 
-// 每个 API Key 每天的使用限制
+// 每个 API Key 每天的使用限制（仅用于显示，不再阻止调用）
 const DAILY_LIMIT = 20;
 
 /**
- * 获取今天的日期字符串 (YYYY-MM-DD)，使用 UTC 时间
- * 这样全球用户在 UTC 0 点统一更新额度
+ * 获取今天的日期字符串 (YYYY-MM-DD)，使用太平洋时间
+ * 用户在太平洋时间凌晨统一更新额度
  */
 const getTodayDate = (): string => {
   const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
+  // 太平洋时区：PST (UTC-8) 或 PDT (UTC-7)
+  // 使用 toLocaleString 获取太平洋时间
+  const pacificTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const year = pacificTime.getFullYear();
+  const month = String(pacificTime.getMonth() + 1).padStart(2, '0');
+  const day = String(pacificTime.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -82,8 +85,8 @@ export const recordUsage = async (keyId: string): Promise<void> => {
 };
 
 /**
- * 获取可用的 API Key（未超过每日限制）
- * 随机选择一个可用的 key
+ * 获取可用的 API Key
+ * 随机选择一个 key（不再限制每日使用次数，仅记录）
  */
 export const getAvailableKey = async (): Promise<{ id: string; key: string } | null> => {
   const allKeys = await getAllApiKeys();
@@ -91,28 +94,9 @@ export const getAvailableKey = async (): Promise<{ id: string; key: string } | n
     return null;
   }
 
-  const today = getTodayDate();
-  
-  // 获取所有 key 的今日使用情况
-  const availableKeys: ApiKeyRecord[] = [];
-  
-  for (const keyRecord of allKeys) {
-    const usageId = `${keyRecord.id}_${today}`;
-    const usage = await db.apiKeyUsage.get(usageId);
-    const count = usage ? usage.count : 0;
-    
-    if (count < DAILY_LIMIT) {
-      availableKeys.push(keyRecord);
-    }
-  }
-
-  if (availableKeys.length === 0) {
-    return null;
-  }
-
-  // 随机选择一个可用的 key
-  const randomIndex = Math.floor(Math.random() * availableKeys.length);
-  const selected = availableKeys[randomIndex];
+  // 随机选择一个 key（不再过滤超过限制的 key）
+  const randomIndex = Math.floor(Math.random() * allKeys.length);
+  const selected = allKeys[randomIndex];
   
   return { id: selected.id, key: selected.key };
 };

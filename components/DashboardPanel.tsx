@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { History, BarChart2, Brain, Sparkles, StopCircle, RefreshCw, RotateCcw, Loader2 } from 'lucide-react';
-import { GameSession, Trade } from '../types';
+import { History, BarChart2, Brain, Sparkles, StopCircle, RefreshCw, RotateCcw, Loader2, Clock, X, Eye } from 'lucide-react';
+import { GameSession, Trade, PendingOrder } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 
 interface DashboardPanelProps {
@@ -12,7 +12,11 @@ interface DashboardPanelProps {
     isGeneratingReport?: boolean;
     finalReport: string | null;
     currentTrades: Trade[];
+    pendingOrders: PendingOrder[];  // 挂单列表
     onReviewTrade: (trade: Trade) => void;
+    onViewTradeOrder: (trade: Trade) => void;  // 查看订单（不回退 K 线）
+    onViewPendingOrder: (order: PendingOrder) => void;  // 查看挂单
+    onCancelPendingOrder: (orderId: string) => void;  // 取消挂单
     onEndGame: () => void;
     onStartNewGame: () => void;
     onLoadSession: (sessionId: number) => void;
@@ -22,7 +26,8 @@ interface DashboardPanelProps {
 
 const DashboardPanel: React.FC<DashboardPanelProps> = ({
     balance, initialBalance, session, comparisonStats, loading, isGeneratingReport, finalReport,
-    currentTrades, onReviewTrade, onEndGame, onStartNewGame, onLoadSession, 
+    currentTrades, pendingOrders, onReviewTrade, onViewTradeOrder, onViewPendingOrder, onCancelPendingOrder,
+    onEndGame, onStartNewGame, onLoadSession, 
     isReviewingHistory, viewingTradeId
 }) => {
     
@@ -171,6 +176,64 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                      </div>
                  )}
 
+                 {/* 2.5 Pending Orders (挂单列表) */}
+                 {pendingOrders.filter(o => o.status === 'PENDING').length > 0 && (
+                     <div className="space-y-2">
+                         <div className="flex items-center justify-between px-1">
+                             <h3 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase flex items-center gap-1">
+                                 <Clock size={12} /> 挂单等待触发 ({pendingOrders.filter(o => o.status === 'PENDING').length})
+                             </h3>
+                         </div>
+                         
+                         {pendingOrders.filter(o => o.status === 'PENDING').map(order => (
+                             <div 
+                                 key={order.id}
+                                 className="p-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 shadow-sm relative group"
+                             >
+                                 <div className="flex justify-between items-center mb-1">
+                                     <div className="flex items-center gap-2">
+                                         <span className={`font-bold text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                             order.direction === 'LONG' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
+                                         }`}>
+                                             {order.direction}
+                                         </span>
+                                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 rounded">
+                                             限价单
+                                         </span>
+                                     </div>
+                                     <button
+                                         onClick={(e) => { e.stopPropagation(); onCancelPendingOrder(order.id); }}
+                                         className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-colors"
+                                         title="取消挂单"
+                                     >
+                                         <X size={14} />
+                                     </button>
+                                 </div>
+                                 
+                                 <div className="flex justify-between items-center mt-2">
+                                     <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                                         入场价: <span className="text-amber-600 dark:text-amber-400 font-bold">{order.triggerPrice}</span>
+                                     </span>
+                                     <span className="text-[10px] text-gray-500">
+                                         TP: {order.tp} / SL: {order.sl}
+                                     </span>
+                                 </div>
+                                 
+                                 {order.reason && (
+                                     <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-400 truncate" title={order.reason}>
+                                         📝 {order.reason.slice(0, 50)}{order.reason.length > 50 ? '...' : ''}
+                                     </div>
+                                 )}
+                                 
+                                 <div className="mt-2 text-[10px] text-amber-500 dark:text-amber-400 animate-pulse flex items-center gap-1">
+                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                     等待价格触发...
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 )}
+
                  {/* 3. Trade List */}
                  <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
@@ -182,11 +245,10 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     {currentTrades.map(trade => (
                         <div 
                             key={trade.id} 
-                            onClick={() => onReviewTrade(trade)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all relative group ${
+                            className={`p-3 rounded-lg border transition-all relative ${
                                 trade.status === 'OPEN' 
                                 ? 'bg-white dark:bg-gray-800 border-yellow-500/50 shadow-sm' 
-                                : 'bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-600 shadow-sm'
+                                : 'bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 shadow-sm'
                             } ${viewingTradeId === trade.id && isReviewingHistory ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/10' : ''}`}
                         >
                             <div className="flex justify-between items-center mb-1">
@@ -221,10 +283,21 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                                 </div>
                             )}
                             
-                            {/* Hover Hint */}
-                            {!isReviewingHistory && (
-                                <div className="absolute inset-0 bg-black/5 dark:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg pointer-events-none">
-                                    <span className="text-[10px] font-bold bg-white dark:bg-gray-800 px-2 py-1 rounded shadow text-gray-700 dark:text-gray-300">点击复盘</span>
+                            {/* Action Buttons */}
+                            {trade.status !== 'OPEN' && !isReviewingHistory && (
+                                <div className="mt-3 flex gap-2">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onViewTradeOrder(trade); }}
+                                        className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 text-[10px] font-bold rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+                                    >
+                                        <Eye size={12} /> 查看订单
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onReviewTrade(trade); }}
+                                        className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 text-[10px] font-bold rounded-md bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 transition-colors"
+                                    >
+                                        <RotateCcw size={12} /> 复盘
+                                    </button>
                                 </div>
                             )}
                         </div>

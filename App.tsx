@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { KLineData, Timeframe, Trade, GameSession } from './types';
+import { KLineData, Timeframe, Trade, GameSession, PendingOrder } from './types';
 import { getHigherTimeframe, fetchMarketData, timeframeToMs, generateRandomMarketEndTime } from './services/binanceService';
 import { analyzeTrade, generateGameReport, analyzeMarket, reviewClosedTrade } from './services/geminiService';
 import { db, getSetting, saveSetting, SETTINGS_KEYS } from './db';
@@ -72,7 +72,10 @@ const App: React.FC = () => {
   const [isMarketAnalyzing, setIsMarketAnalyzing] = useState(false);
   
   // 预览止盈止损价格（下单面板输入时显示在 K 线图上）
-  const [previewPrices, setPreviewPrices] = useState<{tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT'} | null>(null);
+  const [previewPrices, setPreviewPrices] = useState<{tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null} | null>(null);
+  
+  // 限价挂单列表
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
   
   // Modals
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -143,11 +146,11 @@ const App: React.FC = () => {
   }, []);
 
   // 处理预览止盈止损价格变化
-  const handlePreviewPricesChange = useCallback((tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT') => {
-    if (tp === null && sl === null) {
+  const handlePreviewPricesChange = useCallback((tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null) => {
+    if (tp === null && sl === null && !entryPrice) {
       setPreviewPrices(null);
     } else {
-      setPreviewPrices({ tp, sl, direction });
+      setPreviewPrices({ tp, sl, direction, entryPrice });
     }
   }, []);
 
@@ -249,10 +252,29 @@ const App: React.FC = () => {
         updateHtfWithLtf(newCandle, htf);
     }
 
+    // 检查挂单是否触发
+    if (!activeTrade && pendingOrders.length > 0) {
+      const triggeredOrder = pendingOrders.find(order => {
+        if (order.status !== 'PENDING') return false;
+        if (order.direction === 'LONG') {
+          // 做多限价单：价格下跌到触发价
+          return newCandle.low <= order.triggerPrice;
+        } else {
+          // 做空限价单：价格上涨到触发价
+          return newCandle.high >= order.triggerPrice;
+        }
+      });
+      
+      if (triggeredOrder) {
+        // 触发挂单，执行交易
+        triggerPendingOrder(triggeredOrder, newCandle);
+      }
+    }
+
     if (activeTrade) {
       checkTradeStatus(activeTrade, newCandle);
     }
-  }, [currentIndex, allCandles, activeTrade, session, updateHtfWithLtf, isReviewingHistory]);
+  }, [currentIndex, allCandles, activeTrade, session, updateHtfWithLtf, isReviewingHistory, pendingOrders]);
 
   useEffect(() => {
     if (isPlaying && !isReviewingHistory) {
@@ -468,6 +490,66 @@ const App: React.FC = () => {
     setSidebarView('TRADE_PANEL');
     if (isMobile) setShowMobileSidebar(true);
   };
+
+  // --- 限价单管理 ---
+  // 创建限价挂单
+  const createPendingOrder = (triggerPrice: number, tp: number, sl: number, reason: string) => {
+    if (activeTrade) {
+      alert('已有持仓，无法创建挂单');
+      return;
+    }
+    
+    const newOrder: PendingOrder = {
+      id: `pending_${Date.now()}`,
+      gameId: session?.id || 0,
+      symbol: session?.symbol || 'BTCUSDT',
+      direction: modalDirection,
+      orderType: 'LIMIT',
+      triggerPrice,
+      tp,
+      sl,
+      reason,
+      createdAt: Date.now(),
+      status: 'PENDING'
+    };
+    
+    setPendingOrders(prev => [...prev, newOrder]);
+    // 清除预览（挂单成功后清空表单预览线，但保留面板打开状态）
+    setPreviewPrices(null);
+    // 不再关闭面板，用户可继续操作或手动返回
+  };
+
+  // 触发限价挂单
+  const triggerPendingOrder = async (order: PendingOrder, candle: KLineData) => {
+    // 更新挂单状态
+    setPendingOrders(prev => prev.map(o => 
+      o.id === order.id ? { ...o, status: 'TRIGGERED' as const } : o
+    ));
+    
+    // 创建实际交易
+    const newTrade: Trade = {
+      id: `trade_${Date.now()}`,
+      gameId: order.gameId,
+      symbol: order.symbol,
+      direction: order.direction,
+      entryPrice: order.triggerPrice,
+      tp: order.tp,
+      sl: order.sl,
+      quantity: (balance * 0.5) / order.triggerPrice,
+      entryTime: candle.timestamp,
+      status: 'OPEN',
+      pnl: 0,
+      reason: order.reason
+    };
+    
+    setActiveTrade(newTrade);
+    setTradeHistory(prev => [newTrade, ...prev]);
+    setViewingTrade(newTrade);
+    setSidebarView('TRADE_PANEL');
+    if (isMobile) setShowMobileSidebar(true);
+    await db.trades.add(newTrade);
+  };
+
   const executeTrade = async (reason: string, tp: number, sl: number, preAnalysis?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]) => {
     // 下单后清除预览线
     setPreviewPrices(null);
@@ -531,6 +613,12 @@ const App: React.FC = () => {
       }
   };
 
+  // 查看订单（不改变 K 线位置，只显示订单信息和 AI 分析）
+  const handleViewTradeOrder = (trade: Trade) => {
+      setViewingTrade(trade);
+      setSidebarView('TRADE_PANEL');
+      if (isMobile) setShowMobileSidebar(true);
+  };
   const handleBackToLive = () => {
       const resumeIndex = lastPlayedIndexRef.current;
       setCurrentIndex(resumeIndex);
@@ -657,6 +745,7 @@ const App: React.FC = () => {
           htfData={displayedHtfHistory}
           currentHtfCandle={currentHtfCandle}
           trades={tradeHistory}
+          pendingOrders={pendingOrders}
           isReviewingHistory={isReviewingHistory}
           onBackToLive={handleBackToLive}
           onCandleClick={(ts) => {
@@ -689,7 +778,11 @@ const App: React.FC = () => {
                         balance={balance} initialBalance={INITIAL_BALANCE} session={session}
                         comparisonStats={comparisonStats} loading={loading} isGeneratingReport={isGeneratingReport}
                         finalReport={finalReport} currentTrades={tradeHistory}
+                        pendingOrders={pendingOrders}
                         onReviewTrade={handleReviewTrade}
+                        onViewTradeOrder={handleViewTradeOrder}
+                        onViewPendingOrder={() => {}} 
+                        onCancelPendingOrder={(orderId) => setPendingOrders(prev => prev.filter(o => o.id !== orderId))}
                         onStartNewGame={() => setConfirmConfig({ isOpen: true, title: '重新开始', message: '确定要放弃当前进度并开始新的一局吗？', onConfirm: () => startNewGame() })}
                         onEndGame={handleEndGame} onLoadSession={handleLoadSession}
                         isReviewingHistory={isReviewingHistory} viewingTradeId={viewingTrade?.id}
@@ -701,7 +794,9 @@ const App: React.FC = () => {
                           setPreviewPrices(null); // 关闭面板时清除预览
                           isMobile ? setShowMobileSidebar(false) : setSidebarView('DASHBOARD');
                         }} 
-                        onConfirm={executeTrade} onAnalyze={handleAnalyzeTrade}
+                        onConfirm={executeTrade} 
+                        onCreatePendingOrder={createPendingOrder}
+                        onAnalyze={handleAnalyzeTrade}
                         currentPrice={allCandles[currentIndex]?.close || 0}
                         direction={modalDirection} balance={balance}
                         viewingTrade={viewingTrade} isLoading={aiLoading}
