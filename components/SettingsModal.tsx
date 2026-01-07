@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Cpu, Sliders, Moon, Sun, ArrowLeft, Key, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Settings, Cpu, Sliders, Moon, Sun, ArrowLeft, Key, Plus, Trash2, AlertCircle, Sparkles } from 'lucide-react';
 import { Timeframe } from '../types';
 import { 
   addApiKey, 
@@ -8,6 +8,7 @@ import {
   getDailyLimit,
   ApiKeyWithUsage 
 } from '../services/apiKeyService';
+import { getSetting, saveSetting, SETTINGS_KEYS, SUPPORTED_MODELS, DEFAULT_MODEL } from '../db';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -43,6 +44,9 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
   const [newKeyInput, setNewKeyInput] = useState('');
   const [isAddingKey, setIsAddingKey] = useState(false);
   const [keyError, setKeyError] = useState('');
+  
+  // 模型选择状态
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
 
   const dailyLimit = getDailyLimit();
 
@@ -62,8 +66,18 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (activeTab === 'apikeys') {
       loadApiKeys();
+      // 加载已保存的模型选择
+      getSetting(SETTINGS_KEYS.SELECTED_MODEL).then(saved => {
+        if (saved) setSelectedModel(saved);
+      });
     }
   }, [activeTab]);
+
+  // 保存模型选择
+  const handleModelChange = async (model: string) => {
+    setSelectedModel(model);
+    await saveSetting(SETTINGS_KEYS.SELECTED_MODEL, model);
+  };
 
   const handleSave = () => {
     setConfigSymbol(localSymbol);
@@ -245,6 +259,25 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 <AlertCircle size={12} /> {keyError}
                             </p>
                         )}
+                    </div>
+
+                    {/* 模型选择 */}
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <Sparkles size={14} className="text-purple-500" /> AI 模型选择
+                        </label>
+                        <select 
+                            value={selectedModel}
+                            onChange={(e) => handleModelChange(e.target.value)}
+                            className="w-full bg-gray-50 dark:bg-gray-950 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all font-mono text-sm"
+                        >
+                            {SUPPORTED_MODELS.map(model => (
+                                <option key={model} value={model}>{model}</option>
+                            ))}
+                        </select>
+                        <p className="mt-2 text-xs text-gray-400">
+                            选择后所有 AI 分析功能将使用该模型，立即生效
+                        </p>
                     </div>
 
                     {/* Key 列表 */}

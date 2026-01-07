@@ -62,7 +62,19 @@ export const SETTINGS_KEYS = {
   THEME: 'theme',
   CONFIG_SYMBOL: 'configSymbol',
   CONFIG_TIMEFRAME: 'configTimeframe',
+  SELECTED_MODEL: 'selectedModel',
 } as const;
+
+// 支持的模型列表
+export const SUPPORTED_MODELS = [
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash-lite',
+] as const;
+
+export const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 // 辅助函数：获取设置值
 export async function getSetting(key: string): Promise<string | null> {

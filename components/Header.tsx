@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Play, Pause, ChevronRight, TrendingUp, TrendingDown, 
   Settings, History, Zap, Trophy, Calendar, Menu,
-  CircleDollarSign, XCircle
+  CircleDollarSign, XCircle, Eye, Loader2
 } from 'lucide-react';
 import { GameSession, Trade } from '../types';
 
@@ -24,13 +24,16 @@ interface HeaderProps {
   setSidebarView: (view: any) => void;
   isMobile: boolean;
   onToggleSidebar: () => void; // For mobile
+  onMarketAnalysis?: () => void;
+  isMarketAnalyzing?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
   session, isPlaying, setIsPlaying, isReviewingHistory, nextCandle,
   currentDisplayIndex, totalCandles, autoPlaySpeed, setAutoPlaySpeed,
   activeTrade, handleOpenTradeModal, handleManualTakeProfit, handleManualStopLoss,
-  loadHistoryAndShowPanel, setSidebarView, isMobile, onToggleSidebar
+  loadHistoryAndShowPanel, setSidebarView, isMobile, onToggleSidebar,
+  onMarketAnalysis, isMarketAnalyzing
 }) => {
   return (
     <header className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 bg-white dark:bg-gray-950 shrink-0 gap-4 transition-colors">
@@ -100,6 +103,21 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-3">
+           {/* 盘面解读按钮 */}
+           <button 
+               onClick={onMarketAnalysis}
+               disabled={session?.status === 'COMPLETED' || isReviewingHistory || isMarketAnalyzing || !session}
+               className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold rounded text-xs sm:text-sm transition-all shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+               title="AI 盘面解读"
+           >
+               {isMarketAnalyzing ? (
+                   <Loader2 size={16} className="animate-spin" />
+               ) : (
+                   <Eye size={16} />
+               )}
+               <span className="hidden sm:inline">解读</span>
+           </button>
+
            {/* 开仓按钮 - 没有持仓时显示 */}
            {!activeTrade && (
              <div className="flex gap-2">

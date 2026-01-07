@@ -23,7 +23,6 @@ interface GameChartsProps {
 
 export interface GameChartsRef {
   resize: () => void;
-  getImages: () => { ltfImage?: string; htfImage?: string };
 }
 
 const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
@@ -51,24 +50,6 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       resize: () => {
         ltfChartInstance.current?.resize();
         htfChartInstance.current?.resize();
-      },
-      getImages: () => {
-        const getImg = (chart: Chart | null) => {
-          if (!chart) return undefined;
-          try {
-            // v9 API: getConvertPictureUrl
-            if (typeof chart.getConvertPictureUrl === "function") {
-              return chart.getConvertPictureUrl(true, "jpeg", "#111827");
-            }
-          } catch (e) {
-            console.warn(e);
-          }
-          return undefined;
-        };
-        return {
-          ltfImage: getImg(ltfChartInstance.current),
-          htfImage: getImg(htfChartInstance.current),
-        };
       },
     }));
 

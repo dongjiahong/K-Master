@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KLineData, Timeframe, Trade, GameSession } from './types';
 import { getHigherTimeframe, fetchMarketData, timeframeToMs, generateRandomMarketEndTime } from './services/binanceService';
-import { analyzeTrade, generateGameReport } from './services/geminiService';
+import { analyzeTrade, generateGameReport, analyzeMarket } from './services/geminiService';
 import { db, getSetting, saveSetting, SETTINGS_KEYS } from './db';
 
 import TradePanel from './components/TradePanel';
@@ -12,6 +12,7 @@ import SessionRestoreModal from './components/SessionRestoreModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import Header from './components/Header';
 import GameCharts, { GameChartsRef } from './components/GameCharts';
+import MarketAnalysisPanel from './components/MarketAnalysisPanel';
 
 // Constants
 const INITIAL_BALANCE = 10000;
@@ -19,7 +20,7 @@ const PRELOAD_COUNT = 200;
 const SUPPORTED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'DOGEUSDT', 'XRPUSDT'];
 const SUPPORTED_TIMEFRAMES = [Timeframe.M5, Timeframe.M15, Timeframe.M30, Timeframe.H1, Timeframe.H4, Timeframe.D1];
 
-type SidebarView = 'DASHBOARD' | 'TRADE_PANEL' | 'HISTORY_PANEL' | 'SETTINGS';
+type SidebarView = 'DASHBOARD' | 'TRADE_PANEL' | 'HISTORY_PANEL' | 'SETTINGS' | 'MARKET_ANALYSIS';
 
 const App: React.FC = () => {
   // --- UI State ---
@@ -65,6 +66,10 @@ const App: React.FC = () => {
   const [finalReport, setFinalReport] = useState<string | null>(null);
   const [comparisonStats, setComparisonStats] = useState<any[]>([]);
   const [customPrompt, setCustomPromptState] = useState<string>('');
+  
+  // 盘面解读状态（临时数据，不存储）
+  const [marketAnalysis, setMarketAnalysis] = useState<string | null>(null);
+  const [isMarketAnalyzing, setIsMarketAnalyzing] = useState(false);
   
   // Modals
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -432,9 +437,18 @@ const App: React.FC = () => {
     
     if (!preAnalysis) {
         setAiLoading(true);
-        const { ltfImage, htfImage } = chartRef.current?.getImages() || {};
-        const visibleData = allCandles.slice(0, currentIndex + 1);
-        const comment = await analyzeTrade(newTrade, visibleData, ltfImage, htfImage, customPrompt);
+        // 获取 K 线数据
+        const ltfCandles = allCandles.slice(0, currentIndex + 1);
+        const htfCandlesCopy = [...htfHistory];
+        if (currentHtfCandle) {
+            const lastHistory = htfCandlesCopy[htfCandlesCopy.length - 1];
+            if (lastHistory && lastHistory.timestamp === currentHtfCandle.timestamp) {
+                htfCandlesCopy[htfCandlesCopy.length - 1] = currentHtfCandle;
+            } else {
+                htfCandlesCopy.push(currentHtfCandle);
+            }
+        }
+        const comment = await analyzeTrade(newTrade, ltfCandles, htfCandlesCopy, customPrompt);
         const updatedTrade = { ...newTrade, aiComment: comment };
         setActiveTrade(updatedTrade);
         setTradeHistory(prev => prev.map(t => t.id === newTrade.id ? updatedTrade : t));
@@ -450,9 +464,20 @@ const App: React.FC = () => {
           id: 'temp', gameId: 0, symbol: session?.symbol || '', direction: modalDirection,
           entryPrice: currentCandle.close, tp, sl, quantity: 0, entryTime: currentCandle.timestamp, status: 'OPEN', pnl: 0, reason
       };
-      const { ltfImage, htfImage } = chartRef.current?.getImages() || {};
-      const visibleData = allCandles.slice(0, currentIndex + 1);
-      const comment = await analyzeTrade(tempTrade, visibleData, ltfImage, htfImage, customPrompt);
+      
+      // 获取 K 线数据
+      const ltfCandles = allCandles.slice(0, currentIndex + 1);
+      const htfCandles = [...htfHistory];
+      if (currentHtfCandle) {
+          const lastHistory = htfCandles[htfCandles.length - 1];
+          if (lastHistory && lastHistory.timestamp === currentHtfCandle.timestamp) {
+              htfCandles[htfCandles.length - 1] = currentHtfCandle;
+          } else {
+              htfCandles.push(currentHtfCandle);
+          }
+      }
+      
+      const comment = await analyzeTrade(tempTrade, ltfCandles, htfCandles, customPrompt);
       setAiLoading(false);
       return comment;
   };
@@ -527,6 +552,50 @@ const App: React.FC = () => {
       if (isMobile) setShowMobileSidebar(true);
   };
 
+  // --- 盘面解读 ---
+  const handleMarketAnalysis = async () => {
+      if (!session) return;
+      
+      const htf = getHigherTimeframe(session.timeframe);
+      
+      // 获取当前可见的 K 线数据
+      const ltfCandles = allCandles.slice(0, currentIndex + 1);
+      
+      // 获取 HTF 数据（包含当前正在形成的蜡烛）
+      const htfCandles = [...htfHistory];
+      if (currentHtfCandle) {
+          const lastHistory = htfCandles[htfCandles.length - 1];
+          if (lastHistory && lastHistory.timestamp === currentHtfCandle.timestamp) {
+              htfCandles[htfCandles.length - 1] = currentHtfCandle;
+          } else {
+              htfCandles.push(currentHtfCandle);
+          }
+      }
+      
+      // 更新状态显示加载中
+      setIsMarketAnalyzing(true);
+      setMarketAnalysis(null);
+      setSidebarView('MARKET_ANALYSIS');
+      if (isMobile) setShowMobileSidebar(true);
+      
+      try {
+          const result = await analyzeMarket(
+              session.symbol,
+              session.timeframe,
+              htf,
+              ltfCandles,
+              htfCandles,
+              customPrompt
+          );
+          setMarketAnalysis(result);
+      } catch (error) {
+          console.error('Market analysis error:', error);
+          setMarketAnalysis('⚠️ 盘面解读失败，请检查网络或稍后重试。');
+      } finally {
+          setIsMarketAnalyzing(false);
+      }
+  };
+
   // --- Computed HTF History for Display ---
   // Filters out any completed HTF candles that are ahead of the current simulation time
   const displayedHtfHistory = useMemo(() => {
@@ -547,6 +616,8 @@ const App: React.FC = () => {
         handleManualStopLoss={handleManualStopLoss}
         loadHistoryAndShowPanel={loadHistoryAndShowPanel} setSidebarView={setSidebarView}
         isMobile={isMobile} onToggleSidebar={() => setShowMobileSidebar(!showMobileSidebar)}
+        onMarketAnalysis={handleMarketAnalysis}
+        isMarketAnalyzing={isMarketAnalyzing}
       />
 
       <div className="flex-1 flex overflow-hidden relative">
@@ -629,6 +700,16 @@ const App: React.FC = () => {
                         customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
                         SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS} SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
                         theme={theme} setTheme={setTheme}
+                     />
+                 )}
+                 {sidebarView === 'MARKET_ANALYSIS' && (
+                     <MarketAnalysisPanel 
+                        analysisResult={marketAnalysis}
+                        isLoading={isMarketAnalyzing}
+                        onClose={() => isMobile ? setShowMobileSidebar(false) : setSidebarView('DASHBOARD')}
+                        symbol={session?.symbol}
+                        ltfTimeframe={session?.timeframe}
+                        htfTimeframe={session ? getHigherTimeframe(session.timeframe) : ''}
                      />
                  )}
 
