@@ -188,6 +188,9 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       return () => resizeObserver.disconnect();
     }, []);
 
+    // 跟踪当前 session ID，用于检测是否是新游戏
+    const lastSessionIdRef = useRef<number | undefined>(undefined);
+
     // Update Data (Bulk or Single)
     useEffect(() => {
       if (ltfChartInstance.current) {
@@ -210,7 +213,24 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         }
         htfChartInstance.current.applyNewData(dataToRender);
       }
-    }, [ltfData, htfData, currentHtfCandle]);
+
+      // 检测是否是新游戏开始（session ID 变化），如果是则重置视口到最新位置
+      const currentSessionId = session?.id;
+      if (currentSessionId !== lastSessionIdRef.current) {
+        lastSessionIdRef.current = currentSessionId;
+        // 延迟执行以确保数据已经渲染
+        setTimeout(() => {
+          if (ltfData.length > 0 && ltfChartInstance.current) {
+            // 滚动到最新数据位置
+            ltfChartInstance.current.scrollToDataIndex(ltfData.length - 1);
+          }
+          if (htfData.length > 0 && htfChartInstance.current) {
+            const htfTotalLength = htfData.length + (currentHtfCandle ? 1 : 0);
+            htfChartInstance.current.scrollToDataIndex(htfTotalLength - 1);
+          }
+        }, 50);
+      }
+    }, [ltfData, htfData, currentHtfCandle, session]);
 
     // Draw Markers - v9: 使用 createOverlay 替代 createShape
     useEffect(() => {
