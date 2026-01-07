@@ -40,6 +40,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
   // 默认展开，分析完后自动收起以展示 AI 结果
   const [isFormExpanded, setIsFormExpanded] = useState(true);
   const [localAnalysis, setLocalAnalysis] = useState<{ type: 'analysis' | 'review'; content: string; timestamp: number }[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Loading Animation State
   const [loadingMsg, setLoadingMsg] = useState('Initializing AI...');
@@ -140,19 +141,23 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
   // Handle "Execute" click
   const handleExecuteClick = () => {
+    setErrorMsg(null); // 清除之前的错误
     console.log('Execute clicked', { reason, tp, sl, onConfirm: !!onConfirm });
+    
     if (!reason.trim()) {
-      alert('请填写下单理由');
+      setErrorMsg('⚠️ 请填写下单理由！');
+      // 3秒后自动清除提示
+      setTimeout(() => setErrorMsg(null), 3000);
       return;
     }
     if (!onConfirm) {
       console.error('onConfirm is not defined - likely in view mode');
-      alert('当前处于查看模式，无法下单');
+      setErrorMsg('当前处于查看模式，无法下单');
+      setTimeout(() => setErrorMsg(null), 3000);
       return;
     }
     console.log('Executing trade with:', { reason, tp: parseFloat(tp), sl: parseFloat(sl) });
     onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis.length > 0 ? localAnalysis : undefined);
-    alert('下单成功！');
   };
 
   const themeColor = activeDirection === 'LONG' ? 'text-trade-profit' : 'text-trade-loss';
@@ -291,6 +296,12 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
                     {/* Textarea - 更紧凑的高度 */}
                     <div className="flex-1 flex flex-col gap-2 min-h-[5rem]">
+                        {/* 错误提示 */}
+                        {errorMsg && (
+                            <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-bold px-3 py-2 rounded-lg animate-pulse">
+                                {errorMsg}
+                            </div>
+                        )}
                         <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
                             <FileText size={12}/> {isViewMode ? '交易逻辑' : '交易计划 (支持 Markdown)'}
                         </label>
