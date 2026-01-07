@@ -718,6 +718,26 @@ const App: React.FC = () => {
     return htfHistory.filter(h => h.timestamp < currentHtfCandle.timestamp);
   }, [htfHistory, currentHtfCandle]);
 
+  // --- Computed Trades for Display ---
+  // 在复盘模式下，根据当前 K 线时间过滤交易记录
+  // 只显示当前时间点之前已入场的订单，且根据当前时间调整显示状态
+  const displayedTrades = useMemo(() => {
+    if (allCandles.length === 0) return tradeHistory;
+    
+    const currentTime = allCandles[currentIndex]?.timestamp || 0;
+    
+    // 过滤并调整交易显示状态
+    return tradeHistory
+      .filter(t => t.entryTime <= currentTime) // 只显示当前时间之前入场的订单
+      .map(t => {
+        // 如果是已平仓订单，但当前时间还未到平仓时间，则显示为 OPEN 状态
+        if (t.exitTime && t.exitTime > currentTime) {
+          return { ...t, status: 'OPEN' as const, exitTime: undefined, exitPrice: undefined };
+        }
+        return t;
+      });
+  }, [tradeHistory, currentIndex, allCandles]);
+
   // --- Render ---
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden transition-colors duration-300">
@@ -744,7 +764,7 @@ const App: React.FC = () => {
           ltfData={allCandles.slice(0, currentIndex + 1)}
           htfData={displayedHtfHistory}
           currentHtfCandle={currentHtfCandle}
-          trades={tradeHistory}
+          trades={displayedTrades}
           pendingOrders={pendingOrders}
           isReviewingHistory={isReviewingHistory}
           onBackToLive={handleBackToLive}

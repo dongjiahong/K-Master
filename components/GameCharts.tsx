@@ -4,10 +4,65 @@ import React, {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { init, dispose, Chart, ActionType, LineType } from "klinecharts";
+import { init, dispose, Chart, ActionType, LineType, registerOverlay, OverlayTemplate } from "klinecharts";
 import { KLineData, Timeframe, GameSession, Trade, PendingOrder } from "../types";
 import { getHigherTimeframe } from "../services/binanceService";
 import { FastForward } from "lucide-react";
+
+// 自定义圆形标记 overlay - 带虚线指引
+const circleMarker: OverlayTemplate = {
+  name: 'circleMarker',
+  totalStep: 2,
+  createPointFigures: ({ overlay, coordinates }) => {
+    const color = (overlay.extendData as { color?: string })?.color || '#2ebd85';
+    const size = (overlay.extendData as { size?: number })?.size || 10;
+    // position: 'top' 在上方, 'bottom' 在下方
+    const position = (overlay.extendData as { position?: string })?.position || 'top';
+    
+    const startX = coordinates[0].x;
+    const startY = coordinates[0].y;
+    // 根据位置计算圆形和虚线的偏移
+    const offset = position === 'top' ? -50 : 50;
+    const circleY = startY + offset;
+    
+    return [
+      // 虚线从入场点连接到圆形
+      {
+        type: 'line',
+        attrs: {
+          coordinates: [
+            { x: startX, y: startY },
+            { x: startX, y: circleY }
+          ]
+        },
+        styles: {
+          style: 'dashed',
+          color: color,
+          size: 1,
+          dashedValue: [4, 4]
+        },
+        ignoreEvent: true,
+      },
+      // 圆形标记
+      {
+        type: 'circle',
+        attrs: {
+          x: startX,
+          y: circleY,
+          r: size / 2,
+        },
+        styles: {
+          style: 'fill',
+          color: color,
+        },
+        ignoreEvent: true,
+      }
+    ];
+  }
+};
+
+// 注册自定义 overlay
+registerOverlay(circleMarker);
 
 interface GameChartsProps {
   theme: "dark" | "light";
@@ -313,15 +368,13 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         if (t.status === "OPEN") {
           // 入场点标记 - 使用红绿圆球区分多空
           const entryArrowOverlay = {
-            name: "simpleAnnotation",
+            name: "circleMarker",
             id: `entry_arrow_${t.id}`,
             points: [{ timestamp: t.entryTime, value: t.entryPrice }],
-            styles: {
-              symbol: {
-                type: "circle",
-                color: t.direction === "LONG" ? "#2ebd85" : "#f6465d",
-                size: 12,
-              },
+            extendData: {
+              color: t.direction === "LONG" ? "#2ebd85" : "#f6465d",
+              size: 12,
+              position: t.direction === "LONG" ? "top" : "bottom",
             },
             lock: true,
           };
@@ -382,36 +435,28 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         else if (t.exitPrice && t.exitTime) {
           // 入场点标记（已关闭的交易）- 使用红绿圆球区分多空
           const closedEntryArrow = {
-            name: "simpleAnnotation",
+            name: "circleMarker",
             id: `closed_entry_arrow_${t.id}`,
             points: [{ timestamp: t.entryTime, value: t.entryPrice }],
-            styles: {
-              symbol: {
-                type: "circle",
-                color:
-                  t.direction === "LONG"
-                    ? "rgba(46, 189, 133, 0.6)"
-                    : "rgba(246, 70, 93, 0.6)",
-                size: 10,
-              },
+            extendData: {
+              color: t.direction === "LONG" ? "rgba(46, 189, 133, 0.6)" : "rgba(246, 70, 93, 0.6)",
+              size: 10,
+              position: t.direction === "LONG" ? "top" : "bottom",
             },
             lock: true,
           };
           ltfChartInstance.current?.createOverlay(closedEntryArrow);
 
-          // 退出点标记
+          // 退出点标记 - 盈利绿圆，亏损红圆
           const exitColor = t.pnl > 0 ? "#2ebd85" : "#f6465d";
-          const exitSymbol = t.pnl > 0 ? "circle" : "rect";
           const exitOverlay = {
-            name: "simpleAnnotation",
+            name: "circleMarker",
             id: `exit_marker_${t.id}`,
             points: [{ timestamp: t.exitTime, value: t.exitPrice }],
-            styles: {
-              symbol: {
-                type: exitSymbol,
-                color: exitColor,
-                size: 10,
-              },
+            extendData: {
+              color: exitColor,
+              size: 10,
+              position: t.pnl > 0 ? "top" : "bottom",
             },
             lock: true,
           };
