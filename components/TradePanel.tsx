@@ -193,7 +193,29 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 <span className="text-sm font-mono font-bold text-gray-700 dark:text-gray-300">{quantity.toFixed(4)}</span>
                             </div>
                             <div className="bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-800">
-                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1"><Percent size={10}/> 盈亏比</span>
+                                <span className="text-[10px] text-gray-500 block mb-0.5 uppercase flex items-center gap-1">
+                                    <Percent size={10}/> 盈亏比
+                                    {!isViewMode && (
+                                        <button
+                                            onClick={() => {
+                                                // 根据止损计算 2:1 盈亏比的止盈价格
+                                                const slPrice = parseFloat(sl) || activePrice;
+                                                const riskDist = Math.abs(activePrice - slPrice);
+                                                let newTp: number;
+                                                if (activeDirection === 'LONG') {
+                                                    newTp = activePrice + riskDist * 2;
+                                                } else {
+                                                    newTp = activePrice - riskDist * 2;
+                                                }
+                                                setTp(newTp.toFixed(2));
+                                            }}
+                                            className="ml-1 px-1.5 py-0.5 text-[9px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-200 dark:border-indigo-700"
+                                            title="点击自动计算 2:1 盈亏比的止盈价格"
+                                        >
+                                            2:1
+                                        </button>
+                                    )}
+                                </span>
                                 <span className={`text-sm font-mono font-bold ${parseFloat(rrRatio) >= 2 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'}`}>1:{rrRatio}</span>
                             </div>
                         </div>
