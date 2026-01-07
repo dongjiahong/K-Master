@@ -19,6 +19,8 @@ interface GameChartsProps {
   isReviewingHistory: boolean;
   onBackToLive: () => void;
   onCandleClick: (timestamp: number) => void;
+  // 预览止盈止损价格（下单面板中实时输入）
+  previewPrices?: { tp: number | null; sl: number | null; direction: 'LONG' | 'SHORT' } | null;
 }
 
 export interface GameChartsRef {
@@ -37,6 +39,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       isReviewingHistory,
       onBackToLive,
       onCandleClick,
+      previewPrices,
     },
     ref
   ) => {
@@ -240,6 +243,49 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       ltfChartInstance.current.removeOverlay();
       htfChartInstance.current?.removeOverlay();
 
+      // 绘制预览止盈止损线（下单面板中实时输入时显示）
+      if (previewPrices && ltfData.length > 0) {
+        const currentTime = ltfData[ltfData.length - 1].timestamp;
+        
+        if (previewPrices.tp) {
+          const tpOverlay = {
+            id: 'preview_tp',
+            name: 'horizontalStraightLine',
+            points: [{ timestamp: currentTime, value: previewPrices.tp }],
+            styles: {
+              line: {
+                color: 'rgba(46, 189, 133, 0.7)',
+                style: LineType.Dashed,
+                dashedValue: [6, 4],
+                size: 1.5,
+              },
+            },
+            lock: true,
+          };
+          ltfChartInstance.current?.createOverlay(tpOverlay);
+          htfChartInstance.current?.createOverlay(tpOverlay);
+        }
+        
+        if (previewPrices.sl) {
+          const slOverlay = {
+            id: 'preview_sl',
+            name: 'horizontalStraightLine',
+            points: [{ timestamp: currentTime, value: previewPrices.sl }],
+            styles: {
+              line: {
+                color: 'rgba(246, 70, 93, 0.7)',
+                style: LineType.Dashed,
+                dashedValue: [6, 4],
+                size: 1.5,
+              },
+            },
+            lock: true,
+          };
+          ltfChartInstance.current?.createOverlay(slOverlay);
+          htfChartInstance.current?.createOverlay(slOverlay);
+        }
+      }
+
       trades.forEach((t) => {
         // 1. Entry marker and lines for OPEN Trades
         if (t.status === "OPEN") {
@@ -373,7 +419,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
           ltfChartInstance.current?.createOverlay(connectionLine);
         }
       });
-    }, [trades]);
+    }, [trades, previewPrices, ltfData]);
 
     return (
       <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">

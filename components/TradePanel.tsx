@@ -15,6 +15,8 @@ interface TradePanelProps {
   viewingTrade?: Trade | null;
   // AI Status
   isLoading?: boolean;
+  // 预览回调：实时上报止盈止损价格给父组件
+  onPreviewChange?: (tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT') => void;
 }
 
 // 不再使用预制模板，用户必须手动填写下单理由
@@ -27,7 +29,8 @@ const TradePanel: React.FC<TradePanelProps> = ({
   direction = 'LONG',
   balance = 0,
   viewingTrade,
-  isLoading = false
+  isLoading = false,
+  onPreviewChange
 }) => {
   const [reason, setReason] = useState('');
   const [tp, setTp] = useState('');
@@ -103,6 +106,24 @@ const TradePanel: React.FC<TradePanelProps> = ({
           }
       }
   }, [isViewMode, viewingTrade, currentPrice, direction]);
+
+  // 监听 tp/sl 变化，实时上报预览价格给父组件
+  useEffect(() => {
+    if (!isViewMode && onPreviewChange) {
+      const numTp = parseFloat(tp) || null;
+      const numSl = parseFloat(sl) || null;
+      onPreviewChange(numTp, numSl, activeDirection);
+    }
+  }, [tp, sl, activeDirection, isViewMode, onPreviewChange]);
+
+  // 组件卸载时清除预览
+  useEffect(() => {
+    return () => {
+      if (onPreviewChange) {
+        onPreviewChange(null, null, 'LONG');
+      }
+    };
+  }, [onPreviewChange]);
 
   // Handle "Analyze" click
   const handleAnalyzeClick = async () => {

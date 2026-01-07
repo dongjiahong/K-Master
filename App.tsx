@@ -71,6 +71,9 @@ const App: React.FC = () => {
   const [marketAnalysis, setMarketAnalysis] = useState<string | null>(null);
   const [isMarketAnalyzing, setIsMarketAnalyzing] = useState(false);
   
+  // 预览止盈止损价格（下单面板输入时显示在 K 线图上）
+  const [previewPrices, setPreviewPrices] = useState<{tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT'} | null>(null);
+  
   // Modals
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [pendingRestoreSession, setPendingRestoreSession] = useState<GameSession | null>(null);
@@ -137,6 +140,15 @@ const App: React.FC = () => {
   const setCustomPrompt = useCallback((value: string) => {
     setCustomPromptState(value);
     saveSetting(SETTINGS_KEYS.CUSTOM_PROMPT, value);
+  }, []);
+
+  // 处理预览止盈止损价格变化
+  const handlePreviewPricesChange = useCallback((tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT') => {
+    if (tp === null && sl === null) {
+      setPreviewPrices(null);
+    } else {
+      setPreviewPrices({ tp, sl, direction });
+    }
   }, []);
 
   // --- Logic: HTF Calculation ---
@@ -457,6 +469,8 @@ const App: React.FC = () => {
     if (isMobile) setShowMobileSidebar(true);
   };
   const executeTrade = async (reason: string, tp: number, sl: number, preAnalysis?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]) => {
+    // 下单后清除预览线
+    setPreviewPrices(null);
     const currentCandle = allCandles[currentIndex];
     const newTrade: Trade = {
       id: `trade_${Date.now()}`, gameId: session?.id || 0, symbol: session?.symbol || 'BTCUSDT',
@@ -649,6 +663,7 @@ const App: React.FC = () => {
               const trade = tradeHistory.find(t => Math.abs(t.entryTime - ts) < 300000);
               if (trade) handleReviewTrade(trade);
           }}
+          previewPrices={previewPrices}
         />
         
         {/* Sidebar (Desktop: Resizable / Mobile: Overlay) */}
@@ -682,11 +697,15 @@ const App: React.FC = () => {
                  )}
                  {sidebarView === 'TRADE_PANEL' && (
                      <TradePanel 
-                        onClose={() => isMobile ? setShowMobileSidebar(false) : setSidebarView('DASHBOARD')} 
+                        onClose={() => {
+                          setPreviewPrices(null); // 关闭面板时清除预览
+                          isMobile ? setShowMobileSidebar(false) : setSidebarView('DASHBOARD');
+                        }} 
                         onConfirm={executeTrade} onAnalyze={handleAnalyzeTrade}
                         currentPrice={allCandles[currentIndex]?.close || 0}
                         direction={modalDirection} balance={balance}
                         viewingTrade={viewingTrade} isLoading={aiLoading}
+                        onPreviewChange={handlePreviewPricesChange}
                      />
                  )}
                  {sidebarView === 'HISTORY_PANEL' && (
