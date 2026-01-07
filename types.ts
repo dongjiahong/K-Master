@@ -32,7 +32,7 @@ export interface Trade {
   status: 'OPEN' | 'CLOSED_TP' | 'CLOSED_SL' | 'CLOSED_MANUAL';
   pnl: number;
   reason: string;
-  aiComment?: string;
+  aiComments?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]; // 支持多个 AI 分析结果
 }
 
 export interface GameSession {

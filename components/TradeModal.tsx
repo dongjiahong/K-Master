@@ -97,8 +97,15 @@ const TradeModal: React.FC<TradeModalProps> = ({
     }
   }, [isOpen, isViewMode, viewingTrade, currentPrice, direction]);
 
+  const [reasonError, setReasonError] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reason.trim()) {
+      setReasonError(true);
+      return;
+    }
+    setReasonError(false);
     if (onConfirm) {
         onConfirm(reason, parseFloat(tp), parseFloat(sl));
     }
@@ -191,17 +198,17 @@ const TradeModal: React.FC<TradeModalProps> = ({
 
                         {/* Textarea */}
                         <div className="flex flex-col gap-2 h-32">
-                            <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
+                            <label className={`text-xs font-bold flex items-center gap-2 shrink-0 ${reasonError ? 'text-red-500' : 'text-blue-500 dark:text-blue-400'}`}>
                                <FileText size={12}/> {isViewMode ? 'TRADING LOGIC' : 'TRADING PLAN (MARKDOWN)'}
+                               {reasonError && <span className="text-red-500 font-normal">- 请填写下单理由</span>}
                             </label>
                             <textarea
                                 disabled={isViewMode}
-                                required
                                 autoFocus={!isViewMode}
                                 value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                                placeholder="# My Setup..."
-                                className="w-full flex-1 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80"
+                                onChange={(e) => { setReason(e.target.value); setReasonError(false); }}
+                                placeholder="请输入你的下单理由..."
+                                className={`w-full flex-1 bg-gray-50 dark:bg-gray-900/50 border rounded-lg p-3 text-sm font-mono text-gray-800 dark:text-gray-300 focus:border-blue-500 outline-none resize-none leading-relaxed custom-scrollbar disabled:opacity-80 ${reasonError ? 'border-red-500 dark:border-red-500' : 'border-gray-200 dark:border-gray-700'}`}
                             />
                         </div>
                     </div>
@@ -249,14 +256,29 @@ const TradeModal: React.FC<TradeModalProps> = ({
                                 </div>
                             </div>
                         </div>
-                    ) : isViewMode && viewingTrade?.aiComment ? (
-                        <div className="text-gray-800 dark:text-gray-200">
-                             <MarkdownRenderer content={viewingTrade.aiComment} />
+                    ) : isViewMode && viewingTrade?.aiComments && viewingTrade.aiComments.length > 0 ? (
+                        <div className="space-y-3">
+                             {viewingTrade.aiComments.map((item, index) => (
+                                 <div key={index} className={`p-3 rounded-lg border text-sm ${
+                                     item.type === 'analysis' 
+                                         ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' 
+                                         : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                                 }`}>
+                                     <div className="flex items-center gap-2 mb-2 text-xs font-bold">
+                                         {item.type === 'analysis' ? (
+                                             <span className="text-indigo-600 dark:text-indigo-400">📊 入场分析</span>
+                                         ) : (
+                                             <span className="text-emerald-600 dark:text-emerald-400">📝 平仓复盘</span>
+                                         )}
+                                     </div>
+                                     <MarkdownRenderer content={item.content} />
+                                 </div>
+                             ))}
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-2">
                              {isViewMode ? (
-                                <span className="text-xs">No analysis available for this trade.</span>
+                                <span className="text-xs">暂无 AI 分析记录</span>
                              ) : (
                                 <>
                                     <Bot size={24} className="opacity-20"/>

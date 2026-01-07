@@ -6,7 +6,7 @@ import MarkdownRenderer from './MarkdownRenderer';
 interface TradePanelProps {
   onClose: () => void; // Now acts as "Back"
   // Create Mode Props
-  onConfirm?: (reason: string, tp: number, sl: number, preAnalysis?: string) => void;
+  onConfirm?: (reason: string, tp: number, sl: number, preAnalysis?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]) => void;
   onAnalyze?: (reason: string, tp: number, sl: number) => Promise<string>;
   currentPrice?: number;
   direction?: 'LONG' | 'SHORT';
@@ -17,7 +17,7 @@ interface TradePanelProps {
   isLoading?: boolean;
 }
 
-const DEFAULT_REASON_TEMPLATE = `# 交易计划\n\n**结构/形态**：\n\n**入场理由**：\n`;
+// 不再使用预制模板，用户必须手动填写下单理由
 
 const TradePanel: React.FC<TradePanelProps> = ({ 
   onClose, 
@@ -29,14 +29,14 @@ const TradePanel: React.FC<TradePanelProps> = ({
   viewingTrade,
   isLoading = false
 }) => {
-  const [reason, setReason] = useState(DEFAULT_REASON_TEMPLATE);
+  const [reason, setReason] = useState('');
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
   
   // UI States
   // 默认展开，分析完后自动收起以展示 AI 结果
   const [isFormExpanded, setIsFormExpanded] = useState(true);
-  const [localAnalysis, setLocalAnalysis] = useState<string | null>(null);
+  const [localAnalysis, setLocalAnalysis] = useState<{ type: 'analysis' | 'review'; content: string; timestamp: number }[]>([]);
 
   // Loading Animation State
   const [loadingMsg, setLoadingMsg] = useState('Initializing AI...');
@@ -87,11 +87,10 @@ const TradePanel: React.FC<TradePanelProps> = ({
           setReason(viewingTrade.reason);
           setTp(viewingTrade.tp.toString());
           setSl(viewingTrade.sl.toString());
-          setLocalAnalysis(viewingTrade.aiComment || null);
-          setIsFormExpanded(false); // 查看模式下默认收起表单，展示 AI 结果
+          setLocalAnalysis(viewingTrade.aiComments || []);
       } else {
           // Reset for new trade only if we don't have a local analysis (prevent reset during re-renders)
-          if (!localAnalysis && reason === DEFAULT_REASON_TEMPLATE && !tp) {
+          if (localAnalysis.length === 0 && !reason && !tp) {
              // Default TP/SL logic
              const dist = currentPrice * 0.01; 
              if (direction === 'LONG') {
@@ -111,8 +110,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
           try {
             // 先展开表单让用户感觉是在基于当前输入分析（其实这里不用操作UI，只需调用逻辑）
             const result = await onAnalyze(reason, parseFloat(tp), parseFloat(sl));
-            setLocalAnalysis(result);
-            setIsFormExpanded(false); // 分析完成后，自动收起表单，最大化 AI 区域
+            setLocalAnalysis(prev => [...prev, { type: 'analysis', content: result, timestamp: Date.now() }]);
           } catch (e) {
               console.error(e);
           }
@@ -121,8 +119,12 @@ const TradePanel: React.FC<TradePanelProps> = ({
 
   // Handle "Execute" click
   const handleExecuteClick = () => {
+    if (!reason.trim()) {
+      alert('请填写下单理由');
+      return;
+    }
     if (onConfirm) {
-        onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis || undefined);
+        onConfirm(reason, parseFloat(tp), parseFloat(sl), localAnalysis.length > 0 ? localAnalysis : undefined);
     }
   };
 
@@ -173,8 +175,8 @@ const TradePanel: React.FC<TradePanelProps> = ({
         {/* Content Wrapper ensuring proper flex distribution */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
 
-            {/* === Form Section (Collapsible, takes 45% height when expanded for optimal ratio) === */}
-            <div className={`flex flex-col border-b border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out bg-white dark:bg-gray-950 overflow-hidden ${isFormExpanded ? 'h-[45%]' : 'h-0'}`}>
+            {/* === Form Section (Collapsible, takes 25% height when expanded) === */}
+            <div className={`flex flex-col border-b border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out bg-white dark:bg-gray-950 overflow-hidden ${isFormExpanded ? 'h-[30%]' : 'h-0'}`}>
                 {/* Changed to flex-col to allow children to grow */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col">
                         
@@ -238,8 +240,8 @@ const TradePanel: React.FC<TradePanelProps> = ({
                     {/* Gap */}
                     <div className="h-4 shrink-0"></div>
 
-                    {/* Textarea - Flexible Height with Compact Min-Height */}
-                    <div className="flex-1 flex flex-col gap-2 min-h-[8rem]">
+                    {/* Textarea - 更紧凑的高度 */}
+                    <div className="flex-1 flex flex-col gap-2 min-h-[5rem]">
                         <label className="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-2 shrink-0">
                             <FileText size={12}/> {isViewMode ? '交易逻辑' : '交易计划 (支持 Markdown)'}
                         </label>
@@ -295,9 +297,27 @@ const TradePanel: React.FC<TradePanelProps> = ({
                                 </div>
                             </div>
                         </div>
-                    ) : (localAnalysis || (isViewMode && viewingTrade?.aiComment)) ? (
-                        <div className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed animate-in fade-in slide-in-from-bottom-2">
-                             <MarkdownRenderer content={localAnalysis || viewingTrade?.aiComment || ""} />
+                    ) : localAnalysis.length > 0 || (isViewMode && viewingTrade?.aiComments && viewingTrade.aiComments.length > 0) ? (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                             {(localAnalysis.length > 0 ? localAnalysis : viewingTrade?.aiComments || []).map((item, index) => (
+                                 <div key={index} className={`p-4 rounded-xl border text-sm leading-relaxed ${
+                                     item.type === 'analysis' 
+                                         ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' 
+                                         : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                                 }`}>
+                                     <div className="flex items-center gap-2 mb-2 text-xs font-bold">
+                                         {item.type === 'analysis' ? (
+                                             <><Sparkles size={12} className="text-indigo-500" /> <span className="text-indigo-600 dark:text-indigo-400">入场分析</span></>
+                                         ) : (
+                                             <><Bot size={12} className="text-emerald-500" /> <span className="text-emerald-600 dark:text-emerald-400">平仓复盘</span></>
+                                         )}
+                                         <span className="text-gray-400 font-normal">{new Date(item.timestamp).toLocaleTimeString()}</span>
+                                     </div>
+                                     <div className="text-gray-800 dark:text-gray-200">
+                                         <MarkdownRenderer content={item.content} />
+                                     </div>
+                                 </div>
+                             ))}
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-2 opacity-60">

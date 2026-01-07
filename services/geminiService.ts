@@ -120,6 +120,130 @@ ${ltfData}
   }
 };
 
+// 复盘分析系统指令
+const REVIEW_SYSTEM_INSTRUCTION = `
+你是一位拥有20年经验的华尔街职业加密货币交易教练。你现在需要对一笔已平仓的交易进行复盘分析。
+
+## 复盘分析要点
+1. **结果分析**：这笔交易是止盈还是止损，盈亏多少。
+2. **入场回顾**：入场时的理由是否合理，入场点位是否恰当。
+3. **执行评价**：止盈止损设置是否合理，实际走势是否符合预期。
+4. **经验总结**：从这笔交易中可以学到什么，下次如何改进。
+
+## 输出格式
+使用 Markdown 格式，结构清晰：
+- 用 emoji 增加可读性
+- 用 **加粗** 突出重点
+- 给出一个明确的评分（x/10）
+- 如果是好的交易，要肯定；如果是差的交易，要指出问题但不要打击信心
+
+## 风格
+- 犀利直接，不说废话
+- 适当幽默
+- 复盘重点是学习和成长
+`;
+
+// 交易复盘分析（平仓后调用）
+export const reviewClosedTrade = async (
+  trade: Trade,
+  ltfCandles: KLineData[],
+  htfCandles: KLineData[],
+  customPrompt?: string
+): Promise<string> => {
+  
+  const activeSystemInstruction = customPrompt && customPrompt.trim().length > 0 
+      ? customPrompt 
+      : REVIEW_SYSTEM_INSTRUCTION;
+
+  // 格式化 K 线数据
+  const ltfData = formatCandles(ltfCandles, 100);
+  const htfData = formatCandles(htfCandles, 50);
+  
+  // 计算关键指标
+  const pnlPercent = ((trade.pnl / (trade.entryPrice * trade.quantity)) * 100).toFixed(2);
+  const rrRatio = Math.abs((trade.tp - trade.entryPrice) / (trade.entryPrice - trade.sl)).toFixed(2);
+  
+  // 交易结果描述
+  const resultType = trade.status === 'CLOSED_TP' ? '✅ 止盈平仓' : trade.status === 'CLOSED_SL' ? '❌ 止损平仓' : '📋 手动平仓';
+  const holdingTime = trade.exitTime && trade.entryTime ? Math.round((trade.exitTime - trade.entryTime) / 60000) : 0;
+
+  const textPrompt = `
+请对这笔已平仓的交易进行复盘分析。
+
+## 交易概要
+- **标的**: ${trade.symbol}
+- **方向**: ${trade.direction}
+- **结果**: ${resultType}
+
+## 入场信息
+- **入场价**: ${trade.entryPrice.toFixed(2)}
+- **入场时间**: ${new Date(trade.entryTime).toLocaleString()}
+- **预设止盈**: ${trade.tp.toFixed(2)}
+- **预设止损**: ${trade.sl.toFixed(2)}
+- **计划盈亏比**: 1:${rrRatio}
+
+## 入场理由（我的下单逻辑）
+${trade.reason || '未填写下单理由'}
+
+## 实际执行结果
+- **出场价**: ${trade.exitPrice?.toFixed(2) || 'N/A'}
+- **出场时间**: ${trade.exitTime ? new Date(trade.exitTime).toLocaleString() : 'N/A'}
+- **持仓时长**: ${holdingTime} 分钟
+- **盈亏金额**: ${trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
+- **盈亏比例**: ${pnlPercent}%
+
+## 大周期 K 线数据 (入场到出场期间, 最近 ${Math.min(htfCandles.length, 50)} 根)
+\`\`\`
+时间 | 开盘 | 最高 | 最低 | 收盘 | 成交量
+${htfData}
+\`\`\`
+
+## 小周期 K 线数据 (入场到出场期间, 最近 ${Math.min(ltfCandles.length, 100)} 根)
+\`\`\`
+时间 | 开盘 | 最高 | 最低 | 收盘 | 成交量
+${ltfData}
+\`\`\`
+
+请复盘分析：
+1. **入场理由评价**：我的下单理由是否合理？入场点位是否恰当？
+2. **止盈止损评价**：预设的止盈止损是否合理？有没有更好的设置方式？
+3. **走势分析**：根据 K 线数据，价格最终如何走到出场位？是否符合预期？
+4. **经验总结**：这笔交易做对了什么？做错了什么？下次如何改进？
+5. **评分**：综合评价并给出 x/10 分
+`;
+
+  // 动态获取可用的 API Key
+  const availableKey = await getAvailableKey();
+  if (!availableKey) {
+    return "⚠️ 没有可用的 API Key，请在设置中添加，或所有 Key 今日已达使用上限。";
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: availableKey.key });
+    const selectedModel = await getSelectedModel();
+    const response = await ai.models.generateContent({
+      model: selectedModel,
+      contents: textPrompt, 
+      config: {
+        systemInstruction: activeSystemInstruction,
+        temperature: 0.7,
+      }
+    });
+    
+    // 记录使用次数
+    await recordUsage(availableKey.id);
+    
+    return response.text || "AI 正在思考人生，暂时无法复盘...";
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    if (error?.status === 429 || error?.message?.includes('429')) {
+      await markKeyAsExhausted(availableKey.id);
+      return "⚠️ 当前 API Key 已达调用限制 (429)，请稍后重试或添加更多 Key。";
+    }
+    return "AI 教练掉线了 (API Error)，请检查网络或 Key。";
+  }
+};
+
 export const generateGameReport = async (trades: Trade[], customPrompt?: string): Promise<string> => {
     if (trades.length === 0) return "你还没有做任何交易，这就是所谓 '空仓是最高的智慧' 吗？😂";
 

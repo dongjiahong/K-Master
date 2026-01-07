@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KLineData, Timeframe, Trade, GameSession } from './types';
 import { getHigherTimeframe, fetchMarketData, timeframeToMs, generateRandomMarketEndTime } from './services/binanceService';
-import { analyzeTrade, generateGameReport, analyzeMarket } from './services/geminiService';
+import { analyzeTrade, generateGameReport, analyzeMarket, reviewClosedTrade } from './services/geminiService';
 import { db, getSetting, saveSetting, SETTINGS_KEYS } from './db';
 
 import TradePanel from './components/TradePanel';
@@ -280,6 +280,40 @@ const App: React.FC = () => {
     if (isMobile) setShowMobileSidebar(true);
 
     await db.trades.put(closedTrade);
+
+    // 止盈或止损平仓时，自动调用 AI 进行复盘分析
+    if (status === 'CLOSED_TP' || status === 'CLOSED_SL') {
+      setAiLoading(true);
+      // 获取入场到出场期间的 K 线数据
+      const entryIndex = allCandles.findIndex(c => c.timestamp >= trade.entryTime);
+      const exitIndex = allCandles.findIndex(c => c.timestamp >= exitTime);
+      const ltfCandles = allCandles.slice(Math.max(0, entryIndex - 50), exitIndex + 1);
+      
+      // 获取 HTF 数据
+      const htfCandlesCopy = [...htfHistory];
+      if (currentHtfCandle) {
+        const lastHistory = htfCandlesCopy[htfCandlesCopy.length - 1];
+        if (lastHistory && lastHistory.timestamp === currentHtfCandle.timestamp) {
+          htfCandlesCopy[htfCandlesCopy.length - 1] = currentHtfCandle;
+        } else {
+          htfCandlesCopy.push(currentHtfCandle);
+        }
+      }
+      
+      // 调用复盘分析
+      const reviewComment = await reviewClosedTrade(closedTrade, ltfCandles, htfCandlesCopy, customPrompt);
+      // 将复盘结果追加到现有的 aiComments 数组
+      const existingComments = closedTrade.aiComments || [];
+      const reviewedTrade = { 
+        ...closedTrade, 
+        aiComments: [...existingComments, { type: 'review' as const, content: reviewComment, timestamp: Date.now() }] 
+      };
+      
+      setTradeHistory(prev => prev.map(t => t.id === closedTrade.id ? reviewedTrade : t));
+      setViewingTrade(reviewedTrade);
+      await db.trades.put(reviewedTrade);
+      setAiLoading(false);
+    }
   };
 
   // --- Manual Take Profit / Stop Loss ---
@@ -422,40 +456,19 @@ const App: React.FC = () => {
     setSidebarView('TRADE_PANEL');
     if (isMobile) setShowMobileSidebar(true);
   };
-  const executeTrade = async (reason: string, tp: number, sl: number, preAnalysis?: string) => {
+  const executeTrade = async (reason: string, tp: number, sl: number, preAnalysis?: { type: 'analysis' | 'review'; content: string; timestamp: number }[]) => {
     const currentCandle = allCandles[currentIndex];
     const newTrade: Trade = {
       id: `trade_${Date.now()}`, gameId: session?.id || 0, symbol: session?.symbol || 'BTCUSDT',
       direction: modalDirection, entryPrice: currentCandle.close, tp, sl,
       quantity: (balance * 0.5) / currentCandle.close, entryTime: currentCandle.timestamp,
-      status: 'OPEN', pnl: 0, reason, aiComment: preAnalysis
+      status: 'OPEN', pnl: 0, reason, aiComments: preAnalysis
     };
     setActiveTrade(newTrade);
     setTradeHistory(prev => [newTrade, ...prev]);
     setViewingTrade(newTrade);
     await db.trades.add(newTrade);
-    
-    if (!preAnalysis) {
-        setAiLoading(true);
-        // 获取 K 线数据
-        const ltfCandles = allCandles.slice(0, currentIndex + 1);
-        const htfCandlesCopy = [...htfHistory];
-        if (currentHtfCandle) {
-            const lastHistory = htfCandlesCopy[htfCandlesCopy.length - 1];
-            if (lastHistory && lastHistory.timestamp === currentHtfCandle.timestamp) {
-                htfCandlesCopy[htfCandlesCopy.length - 1] = currentHtfCandle;
-            } else {
-                htfCandlesCopy.push(currentHtfCandle);
-            }
-        }
-        const comment = await analyzeTrade(newTrade, ltfCandles, htfCandlesCopy, customPrompt);
-        const updatedTrade = { ...newTrade, aiComment: comment };
-        setActiveTrade(updatedTrade);
-        setTradeHistory(prev => prev.map(t => t.id === newTrade.id ? updatedTrade : t));
-        setViewingTrade(updatedTrade);
-        await db.trades.put(updatedTrade);
-        setAiLoading(false);
-    }
+    // 不再自动调用 AI 分析，用户可以使用 AI 分析按钮手动分析
   };
   const handleAnalyzeTrade = async (reason: string, tp: number, sl: number) => {
       setAiLoading(true);
