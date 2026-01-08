@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Repeat, Trophy, Trash2, ArrowLeft, Eye } from 'lucide-react';
 import { GameSession, Trade } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import CareerStatsChart from './CareerStatsChart';
 
 interface GameHistoryPanelProps {
   onClose: () => void;
@@ -49,6 +50,27 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
     });
   }, [sessions, tradesByGame]);
 
+  // 计算生涯趋势数据（按时间正序排列每局的利润率和胜率）
+  const careerTrendData = useMemo(() => {
+    // 按时间正序排列所有已完成的游戏
+    const sortedSessions = [...sessions].sort((a, b) => a.startTime - b.startTime);
+    const INITIAL_BALANCE = 10000; // 初始资金
+    
+    return sortedSessions.map(s => {
+      const trades = tradesByGame[s.id!] || [];
+      const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
+      const winCount = trades.filter(t => t.pnl > 0).length;
+      const winRate = trades.length > 0 ? (winCount / trades.length) * 100 : 0;
+      const profitRate = (totalPnl / INITIAL_BALANCE) * 100;
+      
+      return {
+        label: new Date(s.startTime).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }),
+        profitRate,
+        winRate
+      };
+    });
+  }, [sessions, tradesByGame]);
+
   const handleDeleteClick = (e: React.MouseEvent, groupSessions: GameSession[]) => {
       e.stopPropagation();
       setConfirmDelete({ isOpen: true, sessions: groupSessions });
@@ -75,6 +97,11 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-gray-50 dark:bg-gray-900/50">
+            {/* 生涯趋势图表 */}
+            {sessions.length > 0 && (
+                <CareerStatsChart data={careerTrendData} />
+            )}
+            
             {groupedSessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                     <Trophy size={48} className="mb-4 opacity-20" />
