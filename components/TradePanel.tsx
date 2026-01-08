@@ -140,6 +140,13 @@ const TradePanel: React.FC<TradePanelProps> = ({
   // Handle "Analyze" click
   const handleAnalyzeClick = async () => {
       if (onAnalyze && !isLoading) {
+          // 验证交易计划是否已填写
+          if (!reason.trim()) {
+            setErrorMsg('⚠️ 请先填写交易计划！');
+            setTimeout(() => setErrorMsg(null), 3000);
+            return;
+          }
+          
           try {
             // 先展开表单让用户感觉是在基于当前输入分析（其实这里不用操作UI，只需调用逻辑）
             const result = await onAnalyze(reason, parseFloat(tp), parseFloat(sl));
