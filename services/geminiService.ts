@@ -247,8 +247,11 @@ ${ltfData}
 export const generateGameReport = async (trades: Trade[], customPrompt?: string): Promise<string> => {
     if (trades.length === 0) return "你还没有做任何交易，这就是所谓 '空仓是最高的智慧' 吗？😂";
 
-    const wins = trades.filter(t => t.pnl > 0).length;
-    const totalPnl = trades.reduce((acc, t) => acc + t.pnl, 0);
+    // 按入场时间正序排列（最早的交易在前面）
+    const sortedTrades = [...trades].sort((a, b) => a.entryTime - b.entryTime);
+
+    const wins = sortedTrades.filter(t => t.pnl > 0).length;
+    const totalPnl = sortedTrades.reduce((acc, t) => acc + t.pnl, 0);
     
     const activeSystemInstruction = customPrompt && customPrompt.trim().length > 0 
       ? customPrompt 
@@ -257,12 +260,12 @@ export const generateGameReport = async (trades: Trade[], customPrompt?: string)
     const prompt = `
     复盘总结时间！
     
-    总交易数: ${trades.length}
+    总交易数: ${sortedTrades.length}
     胜场: ${wins}
     总盈亏: ${totalPnl.toFixed(2)}
     
-    交易记录摘要:
-    ${trades.map((t, i) => `${i+1}. ${t.direction} ${t.symbol} PnL:${t.pnl} 原因:${t.reason}`).join('\n')}
+    交易记录摘要 (按时间顺序):
+    ${sortedTrades.map((t, i) => `${i+1}. [${new Date(t.entryTime).toLocaleString()}] ${t.direction} ${t.symbol} PnL:${t.pnl.toFixed(2)} 原因:${t.reason}`).join('\n')}
     
     请给这位交易员写一份终局总结报告，包含评分（S/A/B/C/D）和改进建议。
     `;

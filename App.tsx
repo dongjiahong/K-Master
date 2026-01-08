@@ -334,7 +334,27 @@ const App: React.FC = () => {
   const handleManualTakeProfit = () => {
     if (!tradeManager.activeTrade) return;
     const currentCandle = allCandles[currentIndex];
-    tradeManager.closeTrade(tradeManager.activeTrade, currentCandle.close, 'CLOSED_TP', currentCandle.timestamp).then(closed => {
+    
+    // 获取 K 线数据用于 AI 复盘
+    const entryIndex = allCandles.findIndex(c => c.timestamp >= tradeManager.activeTrade!.entryTime);
+    const ltfCandles = allCandles.slice(Math.max(0, entryIndex - 50), currentIndex + 1);
+    const htfCandlesCopy = [...htfCalc.htfHistory];
+    if (htfCalc.currentHtfCandle) {
+      const lastHistory = htfCandlesCopy[htfCandlesCopy.length - 1];
+      if (lastHistory && lastHistory.timestamp === htfCalc.currentHtfCandle.timestamp) {
+        htfCandlesCopy[htfCandlesCopy.length - 1] = htfCalc.currentHtfCandle;
+      } else {
+        htfCandlesCopy.push(htfCalc.currentHtfCandle);
+      }
+    }
+    
+    tradeManager.closeTrade(
+      tradeManager.activeTrade, 
+      currentCandle.close, 
+      'CLOSED_TP', 
+      currentCandle.timestamp,
+      { ltfCandles, htfCandles: htfCandlesCopy, customPrompt }
+    ).then(closed => {
       setBalance(prev => prev + closed.pnl);
       setViewingTrade(closed);
       setSidebarView('TRADE_PANEL');
@@ -345,7 +365,27 @@ const App: React.FC = () => {
   const handleManualStopLoss = () => {
     if (!tradeManager.activeTrade) return;
     const currentCandle = allCandles[currentIndex];
-    tradeManager.closeTrade(tradeManager.activeTrade, currentCandle.close, 'CLOSED_SL', currentCandle.timestamp).then(closed => {
+    
+    // 获取 K 线数据用于 AI 复盘
+    const entryIndex = allCandles.findIndex(c => c.timestamp >= tradeManager.activeTrade!.entryTime);
+    const ltfCandles = allCandles.slice(Math.max(0, entryIndex - 50), currentIndex + 1);
+    const htfCandlesCopy = [...htfCalc.htfHistory];
+    if (htfCalc.currentHtfCandle) {
+      const lastHistory = htfCandlesCopy[htfCandlesCopy.length - 1];
+      if (lastHistory && lastHistory.timestamp === htfCalc.currentHtfCandle.timestamp) {
+        htfCandlesCopy[htfCandlesCopy.length - 1] = htfCalc.currentHtfCandle;
+      } else {
+        htfCandlesCopy.push(htfCalc.currentHtfCandle);
+      }
+    }
+    
+    tradeManager.closeTrade(
+      tradeManager.activeTrade, 
+      currentCandle.close, 
+      'CLOSED_SL', 
+      currentCandle.timestamp,
+      { ltfCandles, htfCandles: htfCandlesCopy, customPrompt }
+    ).then(closed => {
       setBalance(prev => prev + closed.pnl);
       setViewingTrade(closed);
       setSidebarView('TRADE_PANEL');
