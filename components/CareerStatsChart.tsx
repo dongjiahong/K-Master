@@ -14,31 +14,50 @@ interface CareerStatsChartProps {
 const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
   const chartWidth = 280;
   const chartHeight = 100;
-  const padding = { top: 10, right: 10, bottom: 20, left: 35 };
+  const padding = { top: 10, right: 35, bottom: 20, left: 35 };
   
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
 
-  const { profitPath, winRatePath, yMin, yMax, yTicks, xTicks } = useMemo(() => {
-    if (data.length === 0) return { profitPath: '', winRatePath: '', yMin: -50, yMax: 100, yTicks: [], xTicks: [] };
+  // 使用双 Y 轴：左边利润率，右边胜率
+  const { profitPath, winRatePath, profitYMin, profitYMax, profitYTicks, winRateYMin, winRateYMax, winRateYTicks, xTicks } = useMemo(() => {
+    if (data.length === 0) return { 
+      profitPath: '', 
+      winRatePath: '', 
+      profitYMin: -50, 
+      profitYMax: 100, 
+      profitYTicks: [],
+      winRateYMin: 0,
+      winRateYMax: 100,
+      winRateYTicks: [],
+      xTicks: [] 
+    };
 
-    // 计算 Y 轴范围（利润率可能为负，胜率 0-100）
+    // 分别计算利润率和胜率的 Y 轴范围
     const allProfits = data.map(d => d.profitRate);
     const allWinRates = data.map(d => d.winRate);
-    const allValues = [...allProfits, ...allWinRates];
     
-    let minVal = Math.min(...allValues, 0);
-    let maxVal = Math.max(...allValues, 100);
+    // 利润率范围（可能为负）
+    let profitMin = Math.min(...allProfits, 0);
+    let profitMax = Math.max(...allProfits, 0);
+    const profitRange = profitMax - profitMin || 10; // 防止范围为0
+    profitMin = Math.floor(profitMin - profitRange * 0.15);
+    profitMax = Math.ceil(profitMax + profitRange * 0.15);
     
-    // 添加一些边距
-    const range = maxVal - minVal;
-    minVal = Math.floor(minVal - range * 0.1);
-    maxVal = Math.ceil(maxVal + range * 0.1);
+    // 胜率范围（0-100）
+    let winRateMin = Math.min(...allWinRates, 0);
+    let winRateMax = Math.max(...allWinRates, 100);
+    const winRateRange = winRateMax - winRateMin || 10;
+    winRateMin = Math.max(0, Math.floor(winRateMin - winRateRange * 0.15));
+    winRateMax = Math.min(100, Math.ceil(winRateMax + winRateRange * 0.15));
     
     // 生成 Y 轴刻度
     const tickCount = 3;
-    const tickStep = (maxVal - minVal) / (tickCount - 1);
-    const ticks = Array.from({ length: tickCount }, (_, i) => Math.round(minVal + i * tickStep));
+    const profitTickStep = (profitMax - profitMin) / (tickCount - 1);
+    const profitTicks = Array.from({ length: tickCount }, (_, i) => Math.round(profitMin + i * profitTickStep));
+    
+    const winRateTickStep = (winRateMax - winRateMin) / (tickCount - 1);
+    const winRateTicks = Array.from({ length: tickCount }, (_, i) => Math.round(winRateMin + i * winRateTickStep));
 
     // 生成 X 轴刻度（显示部分日期）
     const xTicksArr = data.length <= 5 
@@ -49,20 +68,24 @@ const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
           { index: data.length - 1, label: data[data.length - 1].label }
         ];
 
-    // 计算点位置
+    // 计算点位置 - 各自使用独立的 Y 轴范围
     const getX = (index: number) => padding.left + (index / Math.max(data.length - 1, 1)) * innerWidth;
-    const getY = (value: number) => padding.top + ((maxVal - value) / (maxVal - minVal)) * innerHeight;
+    const getProfitY = (value: number) => padding.top + ((profitMax - value) / (profitMax - profitMin)) * innerHeight;
+    const getWinRateY = (value: number) => padding.top + ((winRateMax - value) / (winRateMax - winRateMin)) * innerHeight;
 
-    // 生成路径
-    const profitPoints = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.profitRate)}`).join(' ');
-    const winRatePoints = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.winRate)}`).join(' ');
+    // 生成路径 - 各自使用独立的 Y 轴计算
+    const profitPoints = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getProfitY(d.profitRate)}`).join(' ');
+    const winRatePoints = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getWinRateY(d.winRate)}`).join(' ');
 
     return { 
       profitPath: profitPoints, 
       winRatePath: winRatePoints, 
-      yMin: minVal, 
-      yMax: maxVal,
-      yTicks: ticks,
+      profitYMin: profitMin, 
+      profitYMax: profitMax,
+      profitYTicks: profitTicks,
+      winRateYMin: winRateMin,
+      winRateYMax: winRateMax,
+      winRateYTicks: winRateTicks,
       xTicks: xTicksArr
     };
   }, [data]);
@@ -77,7 +100,8 @@ const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
   }
 
   const getX = (index: number) => padding.left + (index / Math.max(data.length - 1, 1)) * innerWidth;
-  const getY = (value: number) => padding.top + ((yMax - value) / (yMax - yMin)) * innerHeight;
+  const getProfitY = (value: number) => padding.top + ((profitYMax - value) / (profitYMax - profitYMin)) * innerHeight;
+  const getWinRateY = (value: number) => padding.top + ((winRateYMax - value) / (winRateYMax - winRateYMin)) * innerHeight;
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3 mb-3">
@@ -98,37 +122,51 @@ const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
       </div>
       
       <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
-        {/* 网格线 */}
-        {yTicks.map(tick => (
-          <g key={tick}>
+        {/* 左侧 Y 轴：利润率刻度（绿色） */}
+        {profitYTicks.map(tick => (
+          <g key={`profit-tick-${tick}`}>
             <line
               x1={padding.left}
-              y1={getY(tick)}
+              y1={getProfitY(tick)}
               x2={chartWidth - padding.right}
-              y2={getY(tick)}
+              y2={getProfitY(tick)}
               stroke="currentColor"
               className="text-gray-200 dark:text-gray-800"
               strokeDasharray="2,2"
             />
             <text
               x={padding.left - 5}
-              y={getY(tick)}
+              y={getProfitY(tick)}
               textAnchor="end"
               dominantBaseline="middle"
-              className="text-gray-400 text-[8px] fill-current"
+              className="text-emerald-500 text-[8px] fill-current"
             >
               {tick}%
             </text>
           </g>
         ))}
         
-        {/* 零线高亮 */}
-        {yMin < 0 && yMax > 0 && (
+        {/* 右侧 Y 轴：胜率刻度（蓝色） */}
+        {winRateYTicks.map(tick => (
+          <text
+            key={`winrate-tick-${tick}`}
+            x={chartWidth - padding.right + 5}
+            y={getWinRateY(tick)}
+            textAnchor="start"
+            dominantBaseline="middle"
+            className="text-blue-500 text-[8px] fill-current"
+          >
+            {tick}%
+          </text>
+        ))}
+        
+        {/* 零线高亮（仅针对利润率轴） */}
+        {profitYMin < 0 && profitYMax > 0 && (
           <line
             x1={padding.left}
-            y1={getY(0)}
+            y1={getProfitY(0)}
             x2={chartWidth - padding.right}
-            y2={getY(0)}
+            y2={getProfitY(0)}
             stroke="currentColor"
             className="text-gray-400 dark:text-gray-600"
             strokeWidth={1}
@@ -173,7 +211,7 @@ const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
           <circle
             key={`profit-${i}`}
             cx={getX(i)}
-            cy={getY(d.profitRate)}
+            cy={getProfitY(d.profitRate)}
             r={3}
             fill="#10b981"
             className="hover:r-4 transition-all"
@@ -185,7 +223,7 @@ const CareerStatsChart: React.FC<CareerStatsChartProps> = ({ data }) => {
           <circle
             key={`winrate-${i}`}
             cx={getX(i)}
-            cy={getY(d.winRate)}
+            cy={getWinRateY(d.winRate)}
             r={3}
             fill="#3b82f6"
             className="hover:r-4 transition-all"
