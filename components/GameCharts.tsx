@@ -5,49 +5,106 @@ import React, {
   forwardRef,
 } from "react";
 import { init, dispose, Chart, ActionType, LineType, registerOverlay, OverlayTemplate } from "klinecharts";
-import { KLineData, Timeframe, GameSession, Trade, PendingOrder } from "../types";
+import { KLineData, GameSession, Trade, PendingOrder } from "../types";
 import { getHigherTimeframe } from "../services/binanceService";
 import { FastForward } from "lucide-react";
 
-// 自定义圆形标记 overlay - 带虚线指引
-const circleMarker: OverlayTemplate = {
-  name: 'circleMarker',
+// 自定义三角形标记 overlay - 在 K 线最高点上方画小三角形，用虚线连接
+const triangleMarker: OverlayTemplate = {
+  name: 'triangleMarker',
   totalStep: 2,
   createPointFigures: ({ overlay, coordinates }) => {
     const color = (overlay.extendData as { color?: string })?.color || '#2ebd85';
-    const size = (overlay.extendData as { size?: number })?.size || 10;
-    // position: 'top' 在上方, 'bottom' 在下方
-    const position = (overlay.extendData as { position?: string })?.position || 'top';
+    const size = (overlay.extendData as { size?: number })?.size || 18;
     
-    const startX = coordinates[0].x;
-    const startY = coordinates[0].y;
-    // 根据位置计算圆形和虚线的偏移
-    const offset = position === 'top' ? -50 : 50;
-    const circleY = startY + offset;
+    if (coordinates.length < 1) return [];
+    
+    const x = coordinates[0].x;
+    const y = coordinates[0].y;
+    
+    // 三角形顶点在价格点上方更远的位置
+    const offset = 40;  // 三角形距离 K 线顶部的距离
+    const tipY = y - offset;  
+    const halfWidth = size / 2;
     
     return [
-      // 虚线从入场点连接到圆形
+      // 虚线连接 K 线最高点和三角形
       {
         type: 'line',
         attrs: {
           coordinates: [
-            { x: startX, y: startY },
-            { x: startX, y: circleY }
+            { x: x, y: y },
+            { x: x, y: tipY + size }
           ]
         },
         styles: {
           style: 'dashed',
           color: color,
           size: 1,
-          dashedValue: [4, 4]
+          dashedValue: [3, 3]
         },
         ignoreEvent: true,
       },
-      // 圆形标记
+      // 向下的实心三角形
+      {
+        type: 'polygon',
+        attrs: {
+          coordinates: [
+            { x: x, y: tipY + size },           // 底部顶点（指向K线）
+            { x: x - halfWidth, y: tipY },      // 左上角
+            { x: x + halfWidth, y: tipY },      // 右上角
+          ]
+        },
+        styles: {
+          style: 'fill',
+          color: color,
+        },
+        ignoreEvent: true,
+      }
+    ];
+  }
+};
+
+// 自定义圆形标记 overlay - 用于标记持仓状态的入场点
+const circleMarker: OverlayTemplate = {
+  name: 'circleMarker',
+  totalStep: 2,
+  createPointFigures: ({ overlay, coordinates }) => {
+    const color = (overlay.extendData as { color?: string })?.color || '#2ebd85';
+    const size = (overlay.extendData as { size?: number })?.size || 14;
+    
+    if (coordinates.length < 1) return [];
+    
+    const x = coordinates[0].x;
+    const y = coordinates[0].y;
+    
+    // 圆形在价格点上方
+    const offset = 35;
+    const circleY = y - offset;
+    
+    return [
+      // 虚线连接 K 线最高点和圆形
+      {
+        type: 'line',
+        attrs: {
+          coordinates: [
+            { x: x, y: y },
+            { x: x, y: circleY + size / 2 }
+          ]
+        },
+        styles: {
+          style: 'dashed',
+          color: color,
+          size: 1,
+          dashedValue: [3, 3]
+        },
+        ignoreEvent: true,
+      },
+      // 实心圆形
       {
         type: 'circle',
         attrs: {
-          x: startX,
+          x: x,
           y: circleY,
           r: size / 2,
         },
@@ -62,6 +119,7 @@ const circleMarker: OverlayTemplate = {
 };
 
 // 注册自定义 overlay
+registerOverlay(triangleMarker);
 registerOverlay(circleMarker);
 
 interface GameChartsProps {
@@ -364,22 +422,25 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       }
 
       trades.forEach((t) => {
+        // 查找入场 K 线
+        const entryCandle = ltfData.find(c => c.timestamp === t.entryTime);
+        
         // 1. Entry marker and lines for OPEN Trades
         if (t.status === "OPEN") {
-          // 入场点标记 - 使用红绿圆球区分多空
-          const entryArrowOverlay = {
-            name: "circleMarker",
-            id: `entry_arrow_${t.id}`,
-            points: [{ timestamp: t.entryTime, value: t.entryPrice }],
-            extendData: {
-              color: t.direction === "LONG" ? "#2ebd85" : "#f6465d",
-              size: 12,
-              position: t.direction === "LONG" ? "top" : "bottom",
-            },
-            lock: true,
-          };
-          ltfChartInstance.current?.createOverlay(entryArrowOverlay);
-          htfChartInstance.current?.createOverlay(entryArrowOverlay);
+          // 入场点标记 - 持仓用圆形标记
+          if (entryCandle) {
+            const entryMarker = {
+              name: "circleMarker",
+              id: `entry_marker_${t.id}`,
+              points: [{ timestamp: t.entryTime, value: entryCandle.high }],
+              extendData: {
+                color: t.direction === "LONG" ? "#2ebd85" : "#f6465d",
+                size: 14,
+              },
+              lock: true,
+            };
+            ltfChartInstance.current?.createOverlay(entryMarker);
+          }
 
           // 水平线
           const overlays = [
@@ -433,34 +494,37 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         }
         // 2. Entry + Exit Markers for Closed Trades
         else if (t.exitPrice && t.exitTime) {
-          // 入场点标记（已关闭的交易）- 使用红绿圆球区分多空
-          const closedEntryArrow = {
-            name: "circleMarker",
-            id: `closed_entry_arrow_${t.id}`,
-            points: [{ timestamp: t.entryTime, value: t.entryPrice }],
-            extendData: {
-              color: t.direction === "LONG" ? "rgba(46, 189, 133, 0.6)" : "rgba(246, 70, 93, 0.6)",
-              size: 10,
-              position: t.direction === "LONG" ? "top" : "bottom",
-            },
-            lock: true,
-          };
-          ltfChartInstance.current?.createOverlay(closedEntryArrow);
+          // 入场点标记（已关闭的交易）- 在 K 线最高点上方画较小的三角形
+          if (entryCandle) {
+            const closedEntryMarker = {
+              name: "triangleMarker",
+              id: `closed_entry_marker_${t.id}`,
+              points: [{ timestamp: t.entryTime, value: entryCandle.high }],
+              extendData: {
+                color: t.direction === "LONG" ? "rgba(46, 189, 133, 0.6)" : "rgba(246, 70, 93, 0.6)",
+                size: 14,
+              },
+              lock: true,
+            };
+            ltfChartInstance.current?.createOverlay(closedEntryMarker);
+          }
 
-          // 退出点标记 - 盈利绿圆，亏损红圆
-          const exitColor = t.pnl > 0 ? "#2ebd85" : "#f6465d";
-          const exitOverlay = {
-            name: "circleMarker",
-            id: `exit_marker_${t.id}`,
-            points: [{ timestamp: t.exitTime, value: t.exitPrice }],
-            extendData: {
-              color: exitColor,
-              size: 10,
-              position: t.pnl > 0 ? "top" : "bottom",
-            },
-            lock: true,
-          };
-          ltfChartInstance.current?.createOverlay(exitOverlay);
+          // 退出点标记 - 在出场 K 线最高点上方画三角形
+          const exitCandle = ltfData.find(c => c.timestamp === t.exitTime);
+          if (exitCandle) {
+            const exitColor = t.pnl > 0 ? "#2ebd85" : "#f6465d";
+            const exitMarker = {
+              name: "triangleMarker",
+              id: `exit_marker_${t.id}`,
+              points: [{ timestamp: t.exitTime, value: exitCandle.high }],
+              extendData: {
+                color: exitColor,
+                size: 14,
+              },
+              lock: true,
+            };
+            ltfChartInstance.current?.createOverlay(exitMarker);
+          }
 
           // 连接入场和退出的连线
           const connectionLine = {
@@ -474,11 +538,11 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
               line: {
                 color:
                   t.pnl > 0
-                    ? "rgba(46, 189, 133, 0.3)"
-                    : "rgba(246, 70, 93, 0.3)",
+                    ? "rgba(46, 189, 133, 0.6)"
+                    : "rgba(246, 70, 93, 0.6)",
                 style: LineType.Dashed,
                 dashedValue: [4, 4],
-                size: 1,
+                size: 1.5,
               },
             },
             lock: true,
