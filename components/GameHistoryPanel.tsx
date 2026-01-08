@@ -118,6 +118,8 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
                                 const trades = tradesByGame[s.id!] || [];
                                 const sPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
                                 const isProfit = sPnl >= 0;
+                                const winCount = trades.filter(t => t.pnl > 0).length;
+                                const winRate = trades.length > 0 ? Math.round((winCount / trades.length) * 100) : 0;
 
                                 return (
                                     <div key={s.id} className="p-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -126,7 +128,12 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
                                                 {new Date(s.startTime).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}
                                             </span>
                                             <span className={`text-xs font-bold font-mono ${isProfit ? 'text-trade-profit' : 'text-trade-loss'}`}>
-                                                {isProfit ? '+' : ''}{sPnl.toFixed(0)} <span className="text-gray-400 font-normal">({trades.length} trades)</span>
+                                                {isProfit ? '+' : ''}{sPnl.toFixed(0)} 
+                                                <span className="text-gray-400 font-normal ml-1">({trades.length} 笔</span>
+                                                <span className={`font-normal ml-1 ${winRate >= 50 ? 'text-trade-profit' : 'text-trade-loss'}`}>
+                                                    胜率 {winRate}%
+                                                </span>
+                                                <span className="text-gray-400 font-normal">)</span>
                                             </span>
                                         </div>
                                         
