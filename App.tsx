@@ -40,6 +40,7 @@ const App: React.FC = () => {
   // Settings State
   const [configSymbol, setConfigSymbol] = useState('BTCUSDT');
   const [configTimeframe, setConfigTimeframe] = useState<Timeframe>(Timeframe.M5);
+  const [specifiedMarketTime, setSpecifiedMarketTime] = useState<number | null>(null);
   
   // Data State
   const [allCandles, setAllCandles] = useState<KLineData[]>([]);
@@ -225,7 +226,8 @@ const App: React.FC = () => {
     } else {
       const symbol = replayConfig ? replayConfig.symbol : configSymbol;
       const tf = replayConfig ? replayConfig.timeframe : configTimeframe;
-      dataEndTime = replayConfig ? replayConfig.marketEndTime : generateRandomMarketEndTime();
+      // 优先使用 replayConfig，其次使用指定时间，最后随机
+      dataEndTime = replayConfig ? replayConfig.marketEndTime : (specifiedMarketTime || generateRandomMarketEndTime());
       const newSession: GameSession = { startTime: Date.now(), symbol, timeframe: tf, marketEndTime: dataEndTime, initialBalance: INITIAL_BALANCE, status: 'ACTIVE', parentSessionId: replayConfig?.parentId };
       const id = await db.games.add(newSession);
       sessionToUse = { ...newSession, id: id as number };
@@ -629,6 +631,7 @@ const App: React.FC = () => {
                 customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
                 SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS} SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
                 theme={theme} setTheme={setTheme}
+                specifiedMarketTime={specifiedMarketTime} setSpecifiedMarketTime={setSpecifiedMarketTime}
               />
             )}
             {sidebarView === 'MARKET_ANALYSIS' && (

@@ -22,6 +22,8 @@ interface SettingsModalProps {
   SUPPORTED_TIMEFRAMES: Timeframe[];
   theme: 'dark' | 'light';
   setTheme: (val: 'dark' | 'light') => void;
+  specifiedMarketTime: number | null;
+  setSpecifiedMarketTime: (val: number | null) => void;
 }
 
 const SettingsPanel: React.FC<SettingsModalProps> = ({
@@ -30,14 +32,27 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
   configTimeframe, setConfigTimeframe,
   customPrompt, setCustomPrompt,
   SUPPORTED_SYMBOLS, SUPPORTED_TIMEFRAMES,
-  theme, setTheme
+  theme, setTheme,
+  specifiedMarketTime, setSpecifiedMarketTime
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'apikeys' | 'prompt'>('general');
+
+  // 格式化为本地时间字符串 (用于 datetime-local 输入框)
+  const formatLocalDatetime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
   
   const [localSymbol, setLocalSymbol] = useState(configSymbol);
   const [localTimeframe, setLocalTimeframe] = useState(configTimeframe);
   const [localPrompt, setLocalPrompt] = useState(customPrompt);
   const [localTheme, setLocalTheme] = useState(theme);
+  const [localTimeMode, setLocalTimeMode] = useState<'random' | 'specified'>(specifiedMarketTime ? 'specified' : 'random');
+  const [localSpecifiedTime, setLocalSpecifiedTime] = useState<string>('');
 
   // API Keys 状态
   const [apiKeys, setApiKeys] = useState<ApiKeyWithUsage[]>([]);
@@ -61,7 +76,14 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
     setLocalTimeframe(configTimeframe);
     setLocalPrompt(customPrompt);
     setLocalTheme(theme);
-  }, [configSymbol, configTimeframe, customPrompt, theme]);
+    setLocalTimeMode(specifiedMarketTime ? 'specified' : 'random');
+    if (specifiedMarketTime) {
+      setLocalSpecifiedTime(formatLocalDatetime(new Date(specifiedMarketTime)));
+    } else {
+      // 默认使用当前时间
+      setLocalSpecifiedTime(formatLocalDatetime(new Date()));
+    }
+  }, [configSymbol, configTimeframe, customPrompt, theme, specifiedMarketTime]);
 
   useEffect(() => {
     if (activeTab === 'apikeys') {
@@ -84,6 +106,11 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
     setConfigTimeframe(localTimeframe);
     setCustomPrompt(localPrompt);
     setTheme(localTheme);
+    if (localTimeMode === 'specified' && localSpecifiedTime) {
+      setSpecifiedMarketTime(new Date(localSpecifiedTime).getTime());
+    } else {
+      setSpecifiedMarketTime(null);
+    }
     onClose();
   };
 
@@ -221,6 +248,48 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
                         >
                             {SUPPORTED_TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
                         </select>
+                    </div>
+
+                    {/* K线时间模式 */}
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">K线时间</label>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                            <button 
+                                onClick={() => setLocalTimeMode('random')}
+                                className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-all ${localTimeMode === 'random' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            >
+                                🎲
+                                <span className="font-bold text-sm">随机</span>
+                            </button>
+                            <button 
+                                onClick={() => setLocalTimeMode('specified')}
+                                className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-all ${localTimeMode === 'specified' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            >
+                                📅
+                                <span className="font-bold text-sm">指定时间</span>
+                            </button>
+                        </div>
+                        {localTimeMode === 'specified' && (
+                            <div className="space-y-2">
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="datetime-local"
+                                        value={localSpecifiedTime}
+                                        onChange={(e) => setLocalSpecifiedTime(e.target.value)}
+                                        max={formatLocalDatetime(new Date())}
+                                        className="flex-1 bg-gray-50 dark:bg-gray-950 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-gray-900 dark:text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all font-mono text-sm"
+                                    />
+                                    <button
+                                        onClick={() => setLocalSpecifiedTime(formatLocalDatetime(new Date()))}
+                                        className="px-3 py-2 bg-purple-100 dark:bg-purple-900/40 hover:bg-purple-200 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-400 rounded-lg font-bold text-xs transition-all whitespace-nowrap"
+                                        title="获取当前时间"
+                                    >
+                                        ⏱️ 当前
+                                    </button>
+                                </div>
+                                <p className="text-xs text-purple-500 dark:text-purple-400">📍 K 线截止时间</p>
+                            </div>
+                        )}
                     </div>
                 </div>
                 
