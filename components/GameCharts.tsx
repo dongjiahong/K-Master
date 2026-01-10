@@ -3,11 +3,12 @@ import React, {
   useRef,
   useImperativeHandle,
   forwardRef,
+  useState,
 } from "react";
 import { init, dispose, Chart, ActionType, LineType, registerOverlay, OverlayTemplate } from "klinecharts";
 import { KLineData, GameSession, Trade, PendingOrder } from "../types";
 import { getHigherTimeframe } from "../services/binanceService";
-import { FastForward } from "lucide-react";
+import { FastForward, Layers, Activity, Maximize2, Minimize2 } from "lucide-react";
 
 // 自定义三角形标记 overlay - 在 K 线最高点上方画小三角形，用虚线连接
 const triangleMarker: OverlayTemplate = {
@@ -163,6 +164,18 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
     const ltfChartInstance = useRef<Chart | null>(null);
     const htfChartInstance = useRef<Chart | null>(null);
 
+    // Mobile View State
+    const [activeTab, setActiveTab] = useState<'HTF' | 'LTF'>('LTF');
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Detect Mobile
+    useEffect(() => {
+      const checkMobile = () => setIsMobile(window.innerWidth < 768);
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     // Expose methods
     useImperativeHandle(ref, () => ({
       resize: () => {
@@ -223,10 +236,11 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
 
     // Update Styles
     useEffect(() => {
-      const chartBg = theme === "dark" ? "#111827" : "#ffffff";
-      const chartText = theme === "dark" ? "#9CA3AF" : "#4b5563";
-      const chartBorder = theme === "dark" ? "#374151" : "#e5e7eb";
-      const chartGrid = theme === "dark" ? "#1f2937" : "#f3f4f6";
+      const isDark = theme === "dark";
+      const chartBg = isDark ? "#111827" : "#ffffff"; // gray-900 or white
+      const chartText = isDark ? "#9CA3AF" : "#4b5563"; // gray-400 or gray-600
+      const chartBorder = isDark ? "#374151" : "#e5e7eb"; // gray-700 or gray-200
+      const chartGrid = isDark ? "#1f2937" : "#f3f4f6"; // gray-800 or gray-100
 
       const styles = {
         grid: {
@@ -268,15 +282,15 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         separator: { size: 1, color: chartBorder },
         yAxis: {
           show: true,
-          inside: false,
-          axisLine: { show: true, color: chartBorder },
-          tickText: { show: true, color: chartText },
-          tickLine: { show: true, color: chartBorder },
+          inside: true, // Show axis inside for better mobile view
+          axisLine: { show: false }, // Cleaner look
+          tickText: { show: true, color: chartText, size: 10 },
+          tickLine: { show: false },
         },
         xAxis: {
           show: true,
           axisLine: { show: true, color: chartBorder },
-          tickText: { show: true, color: chartText },
+          tickText: { show: true, color: chartText, size: 10 },
           tickLine: { show: true, color: chartBorder },
         },
       };
@@ -295,7 +309,18 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       htfChartInstance.current?.setStyles(bgStyles);
     }, [theme]);
 
-    // Handle Resize
+    // Handle Resize & View Switching
+    useEffect(() => {
+      // Small delay to allow container layout to settle
+      const timer = setTimeout(() => {
+        ltfChartInstance.current?.resize();
+        htfChartInstance.current?.resize();
+      }, 50);
+      
+      return () => clearTimeout(timer);
+    }, [activeTab, isMobile]);
+
+    // Resize Observer for robust resizing
     useEffect(() => {
       const resizeObserver = new ResizeObserver(() => {
         ltfChartInstance.current?.resize();
@@ -613,36 +638,92 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
     }, [trades, pendingOrders, previewPrices, ltfData]);
 
     return (
-      <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-        {/* Back to Live Button (Overlay) */}
+      <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 transition-colors duration-300">
+        
+        {/* Mobile Tabs Switcher */}
+        <div className="md:hidden flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 px-2 py-1.5">
+          <div className="flex space-x-1">
+             <button
+              onClick={() => setActiveTab('HTF')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'HTF' 
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Layers size={14} />
+              <span>CONTEXT</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('LTF')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'LTF' 
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Activity size={14} />
+              <span>TRADING</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Back to Live Button (Floating Glass) */}
         {isReviewingHistory && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className="absolute top-16 md:top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
             <button
               onClick={onBackToLive}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold shadow-xl shadow-blue-900/40 transition-all active:scale-95 border-2 border-blue-400/50"
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600/90 hover:bg-blue-500/90 dark:bg-blue-600/80 dark:hover:bg-blue-500/80 text-white rounded-full font-bold shadow-xl shadow-blue-900/30 backdrop-blur-md transition-all active:scale-95 border border-white/10 group"
             >
-              <FastForward size={16} fill="currentColor" />
-              回到当前 (Resume)
+              <FastForward size={16} className="group-hover:translate-x-0.5 transition-transform" fill="currentColor" />
+              <span>Resume Live</span>
             </button>
           </div>
         )}
 
-        {/* HTF Chart */}
-        <div className="h-1/2 w-full border-b-2 border-gray-200 dark:border-gray-800 relative group">
+        {/* HTF Chart Container */}
+        <div 
+          className={`
+            relative w-full group transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-800
+            ${isMobile ? (activeTab === 'HTF' ? 'flex-1' : 'hidden') : 'h-1/2'}
+          `}
+        >
           <div ref={htfChartRef} className="w-full h-full relative z-10" />
-          <div className="absolute inset-0 flex items-start justify-center pt-16 pointer-events-none z-0">
-            <span className="text-4xl md:text-6xl font-bold text-gray-200 dark:text-gray-600/30 select-none">
-              CONTEXT · {session && getHigherTimeframe(session.timeframe)}
-            </span>
+          
+          {/* Enhanced Watermark */}
+          <div className="absolute top-6 left-4 pointer-events-none z-20 opacity-40 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-700/50">
+              <Layers size={14} className="text-gray-500 dark:text-gray-400" />
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 leading-none mb-0.5">Context</span>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 leading-none">
+                  {session && getHigherTimeframe(session.timeframe)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-        {/* LTF Chart */}
-        <div className="h-1/2 w-full relative group">
+
+        {/* LTF Chart Container */}
+        <div 
+          className={`
+            relative w-full group transition-all duration-300 ease-in-out
+            ${isMobile ? (activeTab === 'LTF' ? 'flex-1' : 'hidden') : 'flex-1'}
+          `}
+        >
           <div ref={ltfChartRef} className="w-full h-full relative z-10" />
-          <div className="absolute inset-0 flex items-start justify-center pt-16 pointer-events-none z-0">
-            <span className="text-4xl md:text-6xl font-bold text-gray-200 dark:text-gray-600/30 select-none">
-              {session && session.symbol} · {session && session.timeframe}
-            </span>
+          
+          {/* Enhanced Watermark */}
+          <div className="absolute top-6 left-4 pointer-events-none z-20 opacity-40 group-hover:opacity-100 transition-opacity">
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-700/50">
+              <Activity size={14} className="text-emerald-500 dark:text-emerald-400" />
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 leading-none mb-0.5">Trading</span>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 leading-none">
+                  {session && `${session.symbol} · ${session.timeframe}`}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
