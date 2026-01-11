@@ -652,7 +652,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
               }`}
             >
               <Layers size={14} />
-              <span>CONTEXT</span>
+              <span>{session?.symbol || 'CONTEXT'}</span>
             </button>
             <button
               onClick={() => setActiveTab('LTF')}
@@ -695,7 +695,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-200/50 dark:border-gray-700/50">
               <Layers size={14} className="text-gray-500 dark:text-gray-400" />
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 leading-none mb-0.5">Context</span>
+                <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 leading-none mb-0.5">{session?.symbol || 'Context'}</span>
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300 leading-none">
                   {session && getHigherTimeframe(session.timeframe)}
                 </span>
