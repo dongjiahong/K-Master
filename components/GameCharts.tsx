@@ -638,9 +638,10 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
     }, [trades, pendingOrders, previewPrices, ltfData]);
 
     return (
-      <div className="flex-1 flex flex-col relative min-w-0 bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 transition-colors duration-300">
-        
-        {/* Mobile Tabs Switcher */}
+      <div 
+        className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-900 relative"
+      >
+        {/* View Selection Tabs (Floating) */}
         <div className="md:hidden flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 px-2 py-1.5">
           <div className="flex space-x-1">
              <button

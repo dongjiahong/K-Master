@@ -88,9 +88,9 @@ const MarketAnalysisPanel: React.FC<MarketAnalysisPanelProps> = ({
     }
 
     return (
-        <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 bg-gray-50 dark:bg-gray-900 relative">
+        <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 relative">
              {/* Header */}
-             <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shrink-0">
+             <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
                 <div className="flex flex-col">
                     <h2 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2 text-sm">
                         <Eye size={16} className="text-purple-500" /> 盘面解读

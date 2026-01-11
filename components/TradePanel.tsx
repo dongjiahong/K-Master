@@ -203,9 +203,9 @@ const TradePanel: React.FC<TradePanelProps> = ({
   const themeBorder = activeDirection === 'LONG' ? 'border-trade-profit' : 'border-trade-loss';
   
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-950 w-full overflow-hidden">
+    <div className="h-full flex flex-col w-full overflow-hidden">
         {/* === Header (Actions Area) === */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-950 z-20">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0 z-20">
              <div className="flex items-center gap-2">
                  <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 transition-colors">
                      <ArrowLeft size={20} />
@@ -270,7 +270,7 @@ const TradePanel: React.FC<TradePanelProps> = ({
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
 
             {/* === Form Section (Collapsible, takes 25% height when expanded) === */}
-            <div className={`flex flex-col border-b border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out bg-white dark:bg-gray-950 overflow-hidden ${isFormExpanded ? 'h-[30%]' : 'h-0'}`}>
+            <div className={`flex flex-col border-b border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out overflow-hidden ${isFormExpanded ? 'h-[30%]' : 'h-0'}`}>
                 {/* Changed to flex-col to allow children to grow */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col">
                         

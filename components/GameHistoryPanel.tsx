@@ -84,7 +84,7 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-950 w-full">
+    <div className="h-full flex flex-col w-full">
         {/* Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
              <div className="flex items-center gap-2">
@@ -96,7 +96,7 @@ const GameHistoryPanel: React.FC<GameHistoryPanelProps> = ({
              </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-gray-50 dark:bg-gray-900/50">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
             {/* 生涯趋势图表 */}
             {sessions.length > 0 && (
                 <CareerStatsChart data={careerTrendData} />
