@@ -64,6 +64,7 @@ export const SETTINGS_KEYS = {
   CONFIG_TIMEFRAME: 'configTimeframe',
   SELECTED_MODEL: 'selectedModel',
   SPECIFIED_MARKET_TIME: 'specifiedMarketTime',
+  SR_CHANNEL_ENABLED: 'srChannelEnabled',
 } as const;
 
 // 支持的模型列表

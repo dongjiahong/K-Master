@@ -5,10 +5,11 @@ import React, {
   forwardRef,
   useState,
 } from "react";
-import { init, dispose, Chart, ActionType, LineType, registerOverlay, OverlayTemplate } from "klinecharts";
+import { init, dispose, Chart, ActionType, LineType, PolygonType, registerOverlay, OverlayTemplate } from "klinecharts";
 import { KLineData, GameSession, Trade, PendingOrder } from "../types";
 import { getHigherTimeframe } from "../services/binanceService";
-import { FastForward, Layers, Activity, Maximize2, Minimize2 } from "lucide-react";
+import { calculateSRChannels, getChannelColor, SRChannelOptions } from "../services/srChannelService";
+import { FastForward, Layers, Activity } from "lucide-react";
 
 // 自定义三角形标记 overlay - 在 K 线最高点上方画小三角形，用虚线连接
 const triangleMarker: OverlayTemplate = {
@@ -119,9 +120,82 @@ const circleMarker: OverlayTemplate = {
   }
 };
 
+// 自定义 SR 支撑阻力通道 overlay - 画横跨整个可见区域的矩形
+const srChannelOverlay: OverlayTemplate = {
+  name: 'srChannel',
+  totalStep: 3, // 需要两个点来定义矩形
+  needDefaultPointFigure: false,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ overlay, coordinates, bounding }) => {
+    const extendData = overlay.extendData as { color?: string; borderColor?: string } | undefined;
+    const color = extendData?.color || 'rgba(46, 189, 133, 0.25)';
+    const borderColor = extendData?.borderColor || 'rgba(46, 189, 133, 0.5)';
+    
+    if (coordinates.length < 2) return [];
+    
+    // 使用 bounding 来获取完整宽度，确保通道横跨整个可见区域
+    const leftX = 0;
+    const rightX = bounding.width;
+    const topY = Math.min(coordinates[0].y, coordinates[1].y);
+    const bottomY = Math.max(coordinates[0].y, coordinates[1].y);
+    
+    return [
+      // 填充矩形
+      {
+        type: 'rect',
+        attrs: {
+          x: leftX,
+          y: topY,
+          width: rightX - leftX,
+          height: bottomY - topY,
+        },
+        styles: {
+          style: 'fill',
+          color: color,
+        },
+        ignoreEvent: true,
+      },
+      // 上边框线
+      {
+        type: 'line',
+        attrs: {
+          coordinates: [
+            { x: leftX, y: topY },
+            { x: rightX, y: topY }
+          ]
+        },
+        styles: {
+          style: 'solid',
+          color: borderColor,
+          size: 1,
+        },
+        ignoreEvent: true,
+      },
+      // 下边框线
+      {
+        type: 'line',
+        attrs: {
+          coordinates: [
+            { x: leftX, y: bottomY },
+            { x: rightX, y: bottomY }
+          ]
+        },
+        styles: {
+          style: 'solid',
+          color: borderColor,
+          size: 1,
+        },
+        ignoreEvent: true,
+      }
+    ];
+  }
+};
+
 // 注册自定义 overlay
 registerOverlay(triangleMarker);
 registerOverlay(circleMarker);
+registerOverlay(srChannelOverlay);
 
 interface GameChartsProps {
   theme: "dark" | "light";
@@ -136,6 +210,9 @@ interface GameChartsProps {
   onCandleClick: (timestamp: number) => void;
   // 预览止盈止损价格（下单面板中实时输入）
   previewPrices?: { tp: number | null; sl: number | null; direction: 'LONG' | 'SHORT'; entryPrice?: number | null } | null;
+  // SR 通道配置
+  srChannelEnabled?: boolean;
+  srChannelOptions?: SRChannelOptions;
 }
 
 export interface GameChartsRef {
@@ -156,6 +233,8 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       onBackToLive,
       onCandleClick,
       previewPrices,
+      srChannelEnabled = true,
+      srChannelOptions,
     },
     ref
   ) => {
@@ -384,6 +463,53 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
       // v9: 使用 removeOverlay 清除所有覆盖物
       ltfChartInstance.current.removeOverlay();
       htfChartInstance.current?.removeOverlay();
+
+      // 绘制 SR 支撑阻力通道
+      if (srChannelEnabled && ltfData.length > 0) {
+        const srChannels = calculateSRChannels(ltfData, srChannelOptions);
+        const firstCandleTime = ltfData[0].timestamp;
+        const lastCandleTime = ltfData[ltfData.length - 1].timestamp;
+        
+        srChannels.forEach((channel, index) => {
+          // LTF 图表上绘制 SR 通道
+          ltfChartInstance.current?.createOverlay({
+            id: `sr_channel_ltf_${index}`,
+            name: 'srChannel',
+            points: [
+              { timestamp: firstCandleTime, value: channel.high },
+              { timestamp: lastCandleTime, value: channel.low }
+            ],
+            extendData: {
+              color: getChannelColor(channel.type, 0.25),
+              borderColor: getChannelColor(channel.type, 0.5),
+            },
+            lock: true,
+          });
+        });
+        
+        // HTF 图表也绘制 SR 通道（使用 htfData 计算）
+        if (htfData.length > 0) {
+          const htfSrChannels = calculateSRChannels(htfData, srChannelOptions);
+          const htfFirstTime = htfData[0].timestamp;
+          const htfLastTime = htfData[htfData.length - 1].timestamp;
+          
+          htfSrChannels.forEach((channel, index) => {
+            htfChartInstance.current?.createOverlay({
+              id: `sr_channel_htf_${index}`,
+              name: 'srChannel',
+              points: [
+                { timestamp: htfFirstTime, value: channel.high },
+                { timestamp: htfLastTime, value: channel.low }
+              ],
+              extendData: {
+                color: getChannelColor(channel.type, 0.25),
+                borderColor: getChannelColor(channel.type, 0.5),
+              },
+              lock: true,
+            });
+          });
+        }
+      }
 
       // 绘制预览止盈止损线（下单面板中实时输入时显示）
       if (previewPrices && ltfData.length > 0) {
@@ -637,7 +763,7 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         ltfChartInstance.current?.createOverlay(pendingSlOverlay);
         htfChartInstance.current?.createOverlay(pendingSlOverlay);
       });
-    }, [trades, pendingOrders, previewPrices, ltfData]);
+    }, [trades, pendingOrders, previewPrices, ltfData, htfData, srChannelEnabled, srChannelOptions]);
 
     return (
       <div 

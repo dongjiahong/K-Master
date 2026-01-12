@@ -24,6 +24,8 @@ interface SettingsModalProps {
   setTheme: (val: 'dark' | 'light') => void;
   specifiedMarketTime: number | null;
   setSpecifiedMarketTime: (val: number | null) => void;
+  srChannelEnabled: boolean;
+  setSrChannelEnabled: (val: boolean) => void;
 }
 
 const SettingsPanel: React.FC<SettingsModalProps> = ({
@@ -33,7 +35,8 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
   customPrompt, setCustomPrompt,
   SUPPORTED_SYMBOLS, SUPPORTED_TIMEFRAMES,
   theme, setTheme,
-  specifiedMarketTime, setSpecifiedMarketTime
+  specifiedMarketTime, setSpecifiedMarketTime,
+  srChannelEnabled, setSrChannelEnabled
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'apikeys' | 'prompt'>('general');
 
@@ -290,6 +293,30 @@ const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 <p className="text-xs text-purple-500 dark:text-purple-400">📍 K 线截止时间</p>
                             </div>
                         )}
+                    </div>
+
+                    {/* SR 通道开关 */}
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">支撑阻力通道</label>
+                                <p className="text-xs text-gray-400 mt-1">在 K 线图上显示支撑阻力区域</p>
+                            </div>
+                            <button
+                                onClick={() => setSrChannelEnabled(!srChannelEnabled)}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    srChannelEnabled 
+                                        ? 'bg-emerald-500' 
+                                        : 'bg-gray-300 dark:bg-gray-600'
+                                }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                        srChannelEnabled ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
                     </div>
                 </div>
                 

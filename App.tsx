@@ -64,6 +64,9 @@ const App: React.FC = () => {
   // 预览止盈止损价格
   const [previewPrices, setPreviewPrices] = useState<{tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null} | null>(null);
   
+  // SR 通道开关
+  const [srChannelEnabled, setSrChannelEnabledState] = useState<boolean>(true);
+  
   // Modals
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [pendingRestoreSession, setPendingRestoreSession] = useState<GameSession | null>(null);
@@ -194,6 +197,12 @@ const App: React.FC = () => {
           console.log('[Settings] 加载指定市场时间:', new Date(timestamp).toLocaleString());
         }
       }
+      
+      // 加载 SR 通道开关设置
+      const savedSrChannel = await getSetting(SETTINGS_KEYS.SR_CHANNEL_ENABLED);
+      if (savedSrChannel !== null) {
+        setSrChannelEnabledState(savedSrChannel === 'true');
+      }
     };
     loadSettings();
   }, []);
@@ -214,6 +223,12 @@ const App: React.FC = () => {
       saveSetting(SETTINGS_KEYS.SPECIFIED_MARKET_TIME, '');
       console.log('[Settings] 清除指定市场时间，使用随机时间');
     }
+  }, []);
+
+  // 持久化 SR 通道开关设置
+  const setSrChannelEnabled = useCallback((value: boolean) => {
+    setSrChannelEnabledState(value);
+    saveSetting(SETTINGS_KEYS.SR_CHANNEL_ENABLED, value.toString());
   }, []);
 
   const handlePreviewPricesChange = useCallback((tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null) => {
@@ -629,6 +644,7 @@ const App: React.FC = () => {
             if (trade) handleReviewTrade(trade);
           }}
           previewPrices={previewPrices}
+          srChannelEnabled={srChannelEnabled}
         />
         
         {(!isMobile || showMobileSidebar) && (
@@ -698,6 +714,7 @@ const App: React.FC = () => {
                 SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS} SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
                 theme={theme} setTheme={setTheme}
                 specifiedMarketTime={specifiedMarketTime} setSpecifiedMarketTime={setSpecifiedMarketTimeWithPersist}
+                srChannelEnabled={srChannelEnabled} setSrChannelEnabled={setSrChannelEnabled}
               />
             )}
             {sidebarView === 'MARKET_ANALYSIS' && (
