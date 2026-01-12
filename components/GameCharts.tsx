@@ -205,12 +205,14 @@ const GameCharts = forwardRef<GameChartsRef, GameChartsProps>(
         // v9: 启用 Y 轴缩放 - 通过 setPaneOptions 配置
         ltfChartInstance.current?.setPaneOptions({
           id: "candle_pane",
+          dragEnabled: true,         // 启用 Pane 拖动
           axisOptions: {
-            scrollZoomEnabled: true, // 启用 Y 轴滚动缩放
+            scrollZoomEnabled: true, // 启用 Y 轴滚轮缩放
           },
         });
         htfChartInstance.current?.setPaneOptions({
           id: "candle_pane",
+          dragEnabled: true,
           axisOptions: {
             scrollZoomEnabled: true,
           },

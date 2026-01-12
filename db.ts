@@ -63,6 +63,7 @@ export const SETTINGS_KEYS = {
   CONFIG_SYMBOL: 'configSymbol',
   CONFIG_TIMEFRAME: 'configTimeframe',
   SELECTED_MODEL: 'selectedModel',
+  SPECIFIED_MARKET_TIME: 'specifiedMarketTime',
 } as const;
 
 // 支持的模型列表

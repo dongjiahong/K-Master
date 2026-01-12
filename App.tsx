@@ -184,6 +184,16 @@ const App: React.FC = () => {
     const loadSettings = async () => {
       const savedPrompt = await getSetting(SETTINGS_KEYS.CUSTOM_PROMPT);
       if (savedPrompt) setCustomPromptState(savedPrompt);
+      
+      // 加载指定市场时间设置
+      const savedMarketTime = await getSetting(SETTINGS_KEYS.SPECIFIED_MARKET_TIME);
+      if (savedMarketTime) {
+        const timestamp = parseInt(savedMarketTime, 10);
+        if (!isNaN(timestamp)) {
+          setSpecifiedMarketTime(timestamp);
+          console.log('[Settings] 加载指定市场时间:', new Date(timestamp).toLocaleString());
+        }
+      }
     };
     loadSettings();
   }, []);
@@ -191,6 +201,19 @@ const App: React.FC = () => {
   const setCustomPrompt = useCallback((value: string) => {
     setCustomPromptState(value);
     saveSetting(SETTINGS_KEYS.CUSTOM_PROMPT, value);
+  }, []);
+
+  // 持久化指定市场时间设置
+  const setSpecifiedMarketTimeWithPersist = useCallback((value: number | null) => {
+    setSpecifiedMarketTime(value);
+    if (value !== null) {
+      saveSetting(SETTINGS_KEYS.SPECIFIED_MARKET_TIME, value.toString());
+      console.log('[Settings] 保存指定市场时间:', new Date(value).toLocaleString());
+    } else {
+      // 删除设置
+      saveSetting(SETTINGS_KEYS.SPECIFIED_MARKET_TIME, '');
+      console.log('[Settings] 清除指定市场时间，使用随机时间');
+    }
   }, []);
 
   const handlePreviewPricesChange = useCallback((tp: number | null, sl: number | null, direction: 'LONG' | 'SHORT', entryPrice?: number | null) => {
@@ -227,7 +250,10 @@ const App: React.FC = () => {
       const symbol = replayConfig ? replayConfig.symbol : configSymbol;
       const tf = replayConfig ? replayConfig.timeframe : configTimeframe;
       // 优先使用 replayConfig，其次使用指定时间，最后随机
+      console.log('[startNewGame] replayConfig:', replayConfig);
+      console.log('[startNewGame] specifiedMarketTime:', specifiedMarketTime, specifiedMarketTime ? new Date(specifiedMarketTime).toLocaleString() : 'null');
       dataEndTime = replayConfig ? replayConfig.marketEndTime : (specifiedMarketTime || generateRandomMarketEndTime());
+      console.log('[startNewGame] 最终使用的 dataEndTime:', new Date(dataEndTime).toLocaleString());
       const newSession: GameSession = { startTime: Date.now(), symbol, timeframe: tf, marketEndTime: dataEndTime, initialBalance: INITIAL_BALANCE, status: 'ACTIVE', parentSessionId: replayConfig?.parentId };
       const id = await db.games.add(newSession);
       sessionToUse = { ...newSession, id: id as number };
@@ -671,7 +697,7 @@ const App: React.FC = () => {
                 customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
                 SUPPORTED_SYMBOLS={SUPPORTED_SYMBOLS} SUPPORTED_TIMEFRAMES={SUPPORTED_TIMEFRAMES}
                 theme={theme} setTheme={setTheme}
-                specifiedMarketTime={specifiedMarketTime} setSpecifiedMarketTime={setSpecifiedMarketTime}
+                specifiedMarketTime={specifiedMarketTime} setSpecifiedMarketTime={setSpecifiedMarketTimeWithPersist}
               />
             )}
             {sidebarView === 'MARKET_ANALYSIS' && (
